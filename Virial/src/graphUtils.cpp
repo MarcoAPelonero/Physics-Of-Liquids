@@ -1,11 +1,15 @@
 #include "graphUtils.hpp"
-#include <algorithm>
-#include <string>
-#include <set>
-#include <vector>
-#include <sstream>
-#include <limits>
-#include <iterator>
+
+// Helper: Compute nCr (binomial coefficient) for nonnegative integers.
+unsigned long long nCr(int n, int r) {
+    if(r > n) return 0;
+    if(r == 0 || r == n) return 1;
+    unsigned long long res = 1;
+    for (int i = 1; i <= r; ++i) {
+        res = res * (n - r + i) / i;
+    }
+    return res;
+}
 
 namespace {
 
@@ -94,7 +98,7 @@ int computeDegeneracy(const NDGraph& graph) {
 
 NDGraph buildGraphFromRemovals(int n, const std::vector<Edge>& removals) {
     NDGraph g(n, true);
-    for(auto &e : removals) {
+    for(auto &e : removals){
         g.removeEdge(e.from, e.to);
     }
     return g;
@@ -113,7 +117,8 @@ std::vector< std::vector<Edge> > generateCombinationsOfSize(const std::vector<Ed
     return result;
 }
 
-std::vector<NDGraph> generateAllConnectedGraphsOptimized(int n) {
+// Modified function with progress bar updates per subset and optional progress display
+std::vector<NDGraph> generateAllConnectedGraphsOptimized(int n, bool show_progress) {
     std::vector<NDGraph> results;
     if(n <= 0)
         return results;
@@ -126,9 +131,19 @@ std::vector<NDGraph> generateAllConnectedGraphsOptimized(int n) {
     }
     std::vector<Edge> allEdges = getCompleteEdgeList(n);
     int M = allEdges.size();
-    int minEdges = n-1;
+    int minEdges = n - 1;
     int maxRemovable = M - minEdges;
+    
+    // Compute total iterations: sum_{r=0}^{maxRemovable} C(M, r)
+    unsigned long long totalWork = 0;
+    for(int r = 0; r <= maxRemovable; ++r)
+        totalWork += nCr(M, r);
+    
     std::set<std::string> canonSet;
+    std::cout << "Processing Connected Optimized Graphs for n = " << n << "\n";
+    ProgressBar pbar(totalWork);
+    
+    unsigned long long workDone = 0;
     for(int removeCount = 0; removeCount <= maxRemovable; removeCount++){
         std::vector< std::vector<Edge> > removalSubsets = generateCombinationsOfSize(allEdges, removeCount);
         for(auto &subset : removalSubsets){
@@ -142,12 +157,15 @@ std::vector<NDGraph> generateAllConnectedGraphsOptimized(int n) {
             g.setDegeneracy(d);
             canonSet.insert(canon);
             results.push_back(g);
+            workDone++;
+            if(show_progress) pbar.update(workDone);
         }
     }
+    if(show_progress) pbar.finish();
     return results;
 }
 
-std::vector<NDGraph> generateAllBiconnectedGraphsOptimized(int n) {
+std::vector<NDGraph> generateAllBiconnectedGraphsOptimized(int n, bool show_progress) {
     std::vector<NDGraph> results;
     if(n <= 0)
         return results;
@@ -157,7 +175,17 @@ std::vector<NDGraph> generateAllBiconnectedGraphsOptimized(int n) {
     int M = allEdges.size();
     int minEdges = (n <= 2) ? 1 : n;
     int maxRemovable = M - minEdges;
+    
+    // Compute total iterations: sum_{r=0}^{maxRemovable} C(M, r)
+    unsigned long long totalWork = 0;
+    for(int r = 0; r <= maxRemovable; ++r)
+        totalWork += nCr(M, r);
+    
     std::set<std::string> canonSet;
+    std::cout << "Processing Biconnected Optimized Graphs for n = " << n << "\n";
+    ProgressBar pbar(totalWork);
+    
+    unsigned long long workDone = 0;
     for(int removeCount = 0; removeCount <= maxRemovable; removeCount++){
         std::vector< std::vector<Edge> > removalSubsets = generateCombinationsOfSize(allEdges, removeCount);
         for(auto &subset : removalSubsets){
@@ -171,8 +199,73 @@ std::vector<NDGraph> generateAllBiconnectedGraphsOptimized(int n) {
             g.setDegeneracy(d);
             canonSet.insert(canon);
             results.push_back(g);
+            workDone++;
+            if(show_progress) pbar.update(workDone);
         }
     }
+    if(show_progress) pbar.finish();
+    return results;
+}
+
+// The non-optimized versions remain unchanged
+std::vector<NDGraph> generateAllConnectedGraphs(int n) {
+    std::vector<NDGraph> results;
+    if(n <= 0) return results;
+    
+    std::vector<Edge> allEdges = getCompleteEdgeList(n);
+    int totalEdges = static_cast<int>(allEdges.size());
+    std::cout << "Processing Connected Non-Opt Graphs for n = " << n << "\n";
+    ProgressBar pbar(1 << totalEdges);
+    for(int subsetMask = 0; subsetMask < (1 << totalEdges); ++subsetMask) {
+        NDGraph g(n, false);
+        for(int bit = 0; bit < totalEdges; ++bit) {
+            if(subsetMask & (1 << bit)) {
+                const auto &edge = allEdges[bit];
+                g.addEdge(edge.from, edge.to);
+            }
+        }
+        if(g.isConnected()) {
+            int d = computeDegeneracy(g);
+            g.setDegeneracy(d);
+            results.push_back(g);
+        }
+        pbar.update(subsetMask);
+    }
+    pbar.finish();
+    return results;
+}
+
+std::vector<NDGraph> generateAllBiconnectedGraphs(int n) {
+    std::vector<NDGraph> results;
+    if(n <= 0) return results;
+    if(n == 1) return results;
+    
+    std::vector<Edge> allEdges = getCompleteEdgeList(n);
+    int totalEdges = static_cast<int>(allEdges.size());
+    std::set<std::string> canonSet;
+    
+    std::cout << "Processing Biconnected Non-Opt Graphs for n = " << n << "\n";
+    ProgressBar pbar(1 << totalEdges);
+    for(int subsetMask = 0; subsetMask < (1 << totalEdges); ++subsetMask) {
+        NDGraph g(n, false);
+        for(int bit = 0; bit < totalEdges; ++bit) {
+            if(subsetMask & (1 << bit)) {
+                const auto &edge = allEdges[bit];
+                g.addEdge(edge.from, edge.to);
+            }
+        }
+        if(g.isBiconnected()) {
+            std::string canon = computeCanonicalLabel(g);
+            if(canonSet.find(canon) != canonSet.end())
+                continue;
+            canonSet.insert(canon);
+            int d = computeDegeneracy(g);
+            g.setDegeneracy(d);
+            results.push_back(g);
+        }
+        pbar.update(subsetMask);
+    }
+    pbar.finish();
     return results;
 }
 

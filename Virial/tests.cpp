@@ -1,6 +1,8 @@
 #include <iostream>
 #include "graph.hpp"
 #include "graphUtils.hpp"
+#include "integration.hpp"
+#include <chrono>
 
 int main() {
     // 2D Graph Example
@@ -131,6 +133,121 @@ int main() {
         graph.printGraph();
         std::cout << "isBiconnected: " << (graph.isBiconnected() ? "true" : "false") << "\n";
     }
+
+    // ==========================================
+    // Compare Optimized vs. Non-Optimized Times
+    // ==========================================
+    auto compareBiconnectedTimes = [&](int n) {
+        std::cout << "\n=== Biconnected Graphs Time Comparison for n = " << n << " ===\n";
+
+        // Measure non-optimized
+        auto startNonOpt = std::chrono::high_resolution_clock::now();
+        std::vector<NDGraph> nonOptResults = GraphUtils::generateAllBiconnectedGraphs(n);
+        auto endNonOpt = std::chrono::high_resolution_clock::now();
+        auto nonOptMs = std::chrono::duration_cast<std::chrono::milliseconds>(endNonOpt - startNonOpt).count();
+
+        // Measure optimized
+        auto startOpt = std::chrono::high_resolution_clock::now();
+        std::vector<NDGraph> optResults = GraphUtils::generateAllBiconnectedGraphsOptimized(n);
+        auto endOpt = std::chrono::high_resolution_clock::now();
+        auto optMs = std::chrono::duration_cast<std::chrono::milliseconds>(endOpt - startOpt).count();
+
+        // Print results
+        std::cout << "Non-Optimized found " << nonOptResults.size() << " graphs in " << nonOptMs << " ms\n";
+        std::cout << "Optimized found " << optResults.size() << " graphs in " << optMs   << " ms\n";
+        std::cout << "Difference: " << (nonOptMs - optMs) << " ms\n";
+    };
+
+    // Compare for n = 2, 3, 4
+    compareBiconnectedTimes(2);
+    compareBiconnectedTimes(3);
+    compareBiconnectedTimes(4);
+    compareBiconnectedTimes(5);
+    // compareBiconnectedTimes(6);
+    // Parameters for the Lennard-Jones potential and Mayer function
+    double epsilon = 1.0; // Depth of the potential well
+    double sigma   = 1.0; // Finite distance at which the potential is zero
+    double kb      = 1.0; // Boltzmann constant (using reduced units)
+    double T       = 1.0; // Temperature
+
+    // Define integration limits for the free particles.
+    // Here we assume one-dimensional positions for the free particles.
+    // We fix particle 1 at x = 0, and allow the others to vary over [-5, 5].
+    const double L = 15.0;
+
+    // ============================================================
+    // Example 1: Three-particle cluster
+    // Fix particle 1 at x = 0; integrate over x2 and x3.
+    // Mayer functions:
+    // f12: between particle 1 (0) and particle 2 (x2)
+    // f13: between particle 1 (0) and particle 3 (x3)
+    // f23: between particle 2 (x2) and particle 3 (x3)
+    // ============================================================
+    Integrand threeParticleIntegrand = [=](const std::vector<double>& x) -> double {
+        // x[0] = x2, x[1] = x3
+        double x2 = x[0];
+        double x3 = x[1];
+
+        // Distances (absolute value since we are in one dimension)
+        double r12 = std::abs(x2 - 0.0);  // Particle 1 at 0
+        double r13 = std::abs(x3 - 0.0);
+        double r23 = std::abs(x3 - x2);
+
+        double f12 = computeMayerFunction(r12, epsilon, sigma, kb, T);
+        double f13 = computeMayerFunction(r13, epsilon, sigma, kb, T);
+        double f23 = computeMayerFunction(r23, epsilon, sigma, kb, T);
+
+        return f12 * f13 * f23;
+    };
+
+    // Two integration variables: x2 and x3 over [-L, L]
+    std::vector<std::pair<double, double>> limitsThree = { {-L, L}, {-L, L} };
+
+    int samplesThree = 50000000; // adjust sample count as needed
+    double resultThree = monteCarloIntegration(threeParticleIntegrand, limitsThree, samplesThree);
+    std::cout << "Monte Carlo integration result (3-particle cluster): " << resultThree << std::endl;
+
+    // ============================================================
+    // Example 2: Four-particle cluster
+    // Fix particle 1 at x = 0; integrate over x2, x3, and x4.
+    // Mayer functions:
+    // f12: between particle 1 (0) and particle 2 (x2)
+    // f13: between particle 1 (0) and particle 3 (x3)
+    // f14: between particle 1 (0) and particle 4 (x4)
+    // f23: between particle 2 (x2) and particle 3 (x3)
+    // f24: between particle 2 (x2) and particle 4 (x4)
+    // f34: between particle 3 (x3) and particle 4 (x4)
+    // ============================================================
+    Integrand fourParticleIntegrand = [=](const std::vector<double>& x) -> double {
+        // x[0] = x2, x[1] = x3, x[2] = x4
+        double x2 = x[0];
+        double x3 = x[1];
+        double x4 = x[2];
+
+        // Compute distances
+        double r12 = std::abs(x2 - 0.0);
+        double r13 = std::abs(x3 - 0.0);
+        double r14 = std::abs(x4 - 0.0);
+        double r23 = std::abs(x3 - x2);
+        double r24 = std::abs(x4 - x2);
+        double r34 = std::abs(x4 - x3);
+
+        double f12 = computeMayerFunction(r12, epsilon, sigma, kb, T);
+        double f13 = computeMayerFunction(r13, epsilon, sigma, kb, T);
+        double f14 = computeMayerFunction(r14, epsilon, sigma, kb, T);
+        double f23 = computeMayerFunction(r23, epsilon, sigma, kb, T);
+        double f24 = computeMayerFunction(r24, epsilon, sigma, kb, T);
+        double f34 = computeMayerFunction(r34, epsilon, sigma, kb, T);
+
+        return f12 * f13 * f14 * f23 * f24 * f34;
+    };
+
+    // Three integration variables: x2, x3, x4 over [-L, L]
+    std::vector<std::pair<double, double>> limitsFour = { {-L, L}, {-L, L}, {-L, L} };
+
+    int samplesFour = 500000; // adjust sample count as needed
+    double resultFour = monteCarloIntegration(fourParticleIntegrand, limitsFour, samplesFour);
+    std::cout << "Monte Carlo integration result (4-particle cluster): " << resultFour << std::endl;
 
     return 0;
 }
