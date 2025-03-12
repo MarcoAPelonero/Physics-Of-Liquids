@@ -2,6 +2,7 @@
 #include "graph.hpp"
 #include "graphUtils.hpp"
 #include "integration.hpp"
+#include "graphToIntegral.hpp"
 #include <chrono>
 
 int main() {
@@ -203,7 +204,7 @@ int main() {
     // Two integration variables: x2 and x3 over [-L, L]
     std::vector<std::pair<double, double>> limitsThree = { {-L, L}, {-L, L} };
 
-    int samplesThree = 50000000; // adjust sample count as needed
+    int samplesThree = 500000; // adjust sample count as needed
     double resultThree = monteCarloIntegration(threeParticleIntegrand, limitsThree, samplesThree);
     std::cout << "Monte Carlo integration result (3-particle cluster): " << resultThree << std::endl;
 
@@ -249,5 +250,23 @@ int main() {
     double resultFour = monteCarloIntegration(fourParticleIntegrand, limitsFour, samplesFour);
     std::cout << "Monte Carlo integration result (4-particle cluster): " << resultFour << std::endl;
 
+    // Example: Create a graph for a three-particle cluster.
+    // We'll fix node 0 and let nodes 1 and 2 be free.
+    // The graph will have nodes 0, 1, 2 and edges: (0,1), (0,2), and (1,2).
+    NDGraph graph(3, false);
+    graph.addEdge(0, 1);
+    graph.addEdge(0, 2);
+    graph.addEdge(1, 2);
+    // (Edges can be added as required by your project.)
+
+    // Define the hypercube integration domain: each node is integrated over [-5, 5].
+    double lowerBound = -5.0;
+    double upperBound = 5.0;
+
+    int numSamples = 10000000; // Number of Monte Carlo samples.
+    double result = computeGraphIntegral(graph, lowerBound, upperBound,
+                                         epsilon, sigma, kb, T, numSamples);
+
+    std::cout << "Computed graph integral over hypercube: " << result << std::endl;
     return 0;
 }
