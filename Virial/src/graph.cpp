@@ -1,5 +1,50 @@
 #include "graph.hpp"
 
+#include <algorithm>
+#include <set>
+#include <vector>
+
+int NDGraph::getAutomorphismCount() const {
+    int numNodes = getNumNodes();
+    if (numNodes <= 1) return 1;
+
+    // Create original edge set as sorted pairs
+    std::set<std::pair<int, int>> originalEdges;
+    for (const auto& edge : edges) {
+        int u = edge.from, v = edge.to;
+        if (u > v) std::swap(u, v);
+        originalEdges.insert({u, v});
+    }
+
+    // Generate permutations of non-fixed nodes (1..numNodes-1)
+    std::vector<int> nonFixedNodes;
+    for (int i = 1; i < numNodes; ++i)
+        nonFixedNodes.push_back(i);
+    
+    int count = 0;
+    do {
+        // Create node mapping: old -> new
+        std::vector<int> nodeMap(numNodes);
+        nodeMap[0] = 0;
+        for (size_t i = 0; i < nonFixedNodes.size(); ++i)
+            nodeMap[i+1] = nonFixedNodes[i];
+
+        // Apply permutation to edges
+        std::set<std::pair<int, int>> permutedEdges;
+        for (const auto& edge : edges) {
+            int u = nodeMap[edge.from];
+            int v = nodeMap[edge.to];
+            if (u > v) std::swap(u, v);
+            permutedEdges.insert({u, v});
+        }
+
+        if (permutedEdges == originalEdges)
+            ++count;
+    } while (std::next_permutation(nonFixedNodes.begin(), nonFixedNodes.end()));
+
+    return count;
+}
+
 NDGraph::NDGraph() {}
 
 NDGraph::NDGraph(int numNodes, bool complete) {

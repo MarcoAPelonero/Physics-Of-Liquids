@@ -8,7 +8,7 @@ from tqdm import tqdm
 max_order = 3         
 T = 1.0              
 numSamples = 1000000
-volumes = np.linspace(5,10, 3)  
+volumes = np.linspace(5,30, 4)  
 num_simulations = 5
 
 # Dictionary to store results.

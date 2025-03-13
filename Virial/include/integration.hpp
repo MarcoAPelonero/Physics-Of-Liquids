@@ -14,10 +14,16 @@ inline double LennardJonesPotential(double r, double epsilon, double sigma) {
 }
 
 // Computes the Mayer function: f(r) = exp(-U(r)/(k_B * T)) - 1
+/*
 inline double computeMayerFunction(double r, double epsilon, double sigma,
                                    double kb, double T) {
     double U = LennardJonesPotential(r, epsilon, sigma);
     return std::exp(-U / (kb * T)) - 1.0;
+} */
+inline double computeMayerFunction(double r, double epsilon, double sigma,
+    double kb, double T) {
+double U = (r < sigma) ? INFINITY : 0.0;
+return std::exp(-U / (kb * T)) - 1.0; // Becomes -1 if r < sigma, else 0
 }
 
 // Define a generic integrand type: function from a vector of variables to a double.

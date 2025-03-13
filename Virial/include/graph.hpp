@@ -49,6 +49,8 @@ public:
     bool isConnected() const;
     bool isBiconnected() const;
 
+    int getAutomorphismCount() const;
+
     void printGraph() const;
 };
 

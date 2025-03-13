@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <iomanip>
 
 int main(int argc, char* argv[])
 {
@@ -52,16 +53,25 @@ int main(int argc, char* argv[])
                 numSamples // Number of Monte Carlo samples
             );
 
-            int symmetryFactor = graph.getDegeneracy(); // Automorphism-based degeneracy factor
-            // Standard factor: (-1)^(n-1)/(n * symmetryFactor)
-            double weight = std::pow(-1.0, n-1) / (static_cast<double>(n) * symmetryFactor);
+            int numEdges = graph.getNumEdges();
+            int automorphismCount = graph.getAutomorphismCount(); // Automorphism-based symmetry factor
+
+            // Compute factorial for (n-1)!
+            double factorial = 1.0;
+            for (int i = 1; i <= n-1; ++i) {
+                factorial *= i;
+            }
+
+            // Standard factor: (-1)^(numEdges) / ((n-1)! * symmetryFactor)
+            double weight = std::pow(-1.0, numEdges) / (factorial * automorphismCount);
 
             Bn += weight * graphIntegral;
         }
 
         // Output the virial coefficient for order n.
-        outFile << n << " " << Bn << "\n";
-        std::cout << "Computed virial coefficient for n = " << n 
+        outFile << std::fixed << std::setprecision(12) << n << " " << Bn << "\n";
+        std::cout << std::fixed << std::setprecision(12)
+                  << "Computed virial coefficient for n = " << n 
                   << ": " << Bn << "\n";
     }
 
