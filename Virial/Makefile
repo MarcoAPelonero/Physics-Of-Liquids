@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Iinclude -std=c++11 -Wall
+CFLAGS = -Iinclude -std=c++11 -Wall -Wextra -Wpedantic
 
 SRC_FILES = $(wildcard src/*.cpp)
 
@@ -19,6 +19,14 @@ run: $(TARGET)
 
 test: $(TEST_TARGET)
 	./$(TEST_TARGET)
+
+runtest:
+ifndef TEST
+	$(error Please specify a test file with TEST=<filename> (without .cpp extension))
+endif
+	$(CC) $(CFLAGS) tests/$(TEST).cpp $(SRC_FILES) -o $(TEST).exe
+	./$(TEST).exe
+	$(RM) $(TEST).exe
 
 $(TEST_TARGET): $(TEST_SRC)
 	$(CC) $(CFLAGS) $(TEST_SRC) -o $(TEST_TARGET)
