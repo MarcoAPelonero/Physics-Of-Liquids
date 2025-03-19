@@ -11,6 +11,10 @@
 struct Node {
     int id;
     Node(int id) : id(id) {}
+
+    bool operator==(const Node &other) const {
+        return id == other.id;
+    }
 };
 
 struct Edge {
@@ -50,6 +54,8 @@ public:
     bool isBiconnected() const;
 
     int getAutomorphismCount() const;
+
+    bool operator==(const NDGraph &other) const;
 
     void printGraph() const;
 };

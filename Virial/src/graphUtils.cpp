@@ -1,272 +1,165 @@
 #include "graphUtils.hpp"
+#include <stdexcept>
+#include <algorithm>
+#include <cmath>
+#include <string>
 
-// Helper: Compute nCr (binomial coefficient) for nonnegative integers.
-unsigned long long nCr(int n, int r) {
-    if(r > n) return 0;
-    if(r == 0 || r == n) return 1;
-    unsigned long long res = 1;
-    for (int i = 1; i <= r; ++i) {
-        res = res * (n - r + i) / i;
-    }
-    return res;
-}
+// For permutations:
+#include <numeric>   // std::iota
+#include <sstream>   // building adjacency matrix strings
 
 namespace {
 
-std::vector<Edge> getCompleteEdgeList(int n) {
-    std::vector<Edge> edges;
-    edges.reserve(n*(n-1)/2);
-    for (int i = 0; i < n; ++i)
-        for (int j = i+1; j < n; ++j)
-            edges.push_back(Edge(i, j));
-    return edges;
-}
-
-void generateCombinationsRecur(const std::vector<Edge>& edges, int startIndex, int k, std::vector<Edge>& current, std::vector< std::vector<Edge> >& result) {
-    if(k == 0) {
-        result.push_back(current);
-        return;
-    }
-    if((int)edges.size() - startIndex < k)
-        return;
-    current.push_back(edges[startIndex]);
-    generateCombinationsRecur(edges, startIndex+1, k-1, current, result);
-    current.pop_back();
-    generateCombinationsRecur(edges, startIndex+1, k, current, result);
-}
-
-std::string computeCanonicalLabel(const NDGraph& graph) {
+// Helper: build an NxN adjacency matrix (as a 2D vector<bool>) from NDGraph edges
+std::vector<std::vector<bool>> buildAdjMatrix(const NDGraph &graph) {
     int n = graph.getNumNodes();
-    const std::vector<Edge>& edges = graph.getEdges();
-    std::vector<int> perm(n);
-    for(int i=0; i<n; ++i) perm[i] = i;
-    std::string best = std::string(n*10, char(127));
-    do {
-        std::vector<std::pair<int,int>> relabeled;
-        for(auto &e : edges) {
-            int u = perm[e.from], v = perm[e.to];
-            if(u > v) std::swap(u,v);
-            relabeled.push_back({u,v});
-        }
-        std::sort(relabeled.begin(), relabeled.end());
-        std::ostringstream oss;
-        for(auto &p : relabeled) {
-            oss << p.first << "," << p.second << ";";
-        }
-        std::string label = oss.str();
-        if(label < best) best = label;
-    } while(std::next_permutation(perm.begin(), perm.end()));
-    return best;
+    std::vector<std::vector<bool>> adj(n, std::vector<bool>(n, false));
+
+    // The NDGraph edges are undirected, so set both [from][to] and [to][from] to true.
+    auto edges = graph.getEdges();
+    for (auto &e : edges) {
+        adj[e.from][e.to] = true;
+        adj[e.to][e.from] = true;
+    }
+    return adj;
 }
 
-int computeDegeneracy(const NDGraph& graph) {
-    int n = graph.getNumNodes();
-    const std::vector<Edge>& edges = graph.getEdges();
-    std::vector<std::vector<int>> adj(n);
-    for(auto &e : edges) {
-        adj[e.from].push_back(e.to);
-        adj[e.to].push_back(e.from);
-    }
-    std::vector<int> degree(n, 0);
-    std::vector<bool> removed(n, false);
-    for(int i=0;i<n;i++){
-        degree[i] = adj[i].size();
-    }
-    int degeneracy = 0;
-    for(int i=0;i<n;i++){
-        int minDegree = std::numeric_limits<int>::max();
-        int minVertex = -1;
-        for(int j=0;j<n;j++){
-            if(!removed[j] && degree[j] < minDegree){
-                minDegree = degree[j];
-                minVertex = j;
-            }
+// Helper: produce adjacency matrix string for a *particular labeling* of the nodes
+// labeling[i] = new label for old node i. We reorder rows & columns accordingly.
+std::string adjacencyMatrixString(const std::vector<std::vector<bool>> &originalAdj,
+                                  const std::vector<int> &labeling) {
+    int n = (int)labeling.size();
+    // We'll build a text row for each row in the permuted adjacency matrix
+    std::ostringstream oss;
+    for (int i = 0; i < n; ++i) {
+        int oldRow = labeling[i];
+        for (int j = 0; j < n; ++j) {
+            int oldCol = labeling[j];
+            oss << (originalAdj[oldRow][oldCol] ? '1' : '0');
         }
-        if(minVertex == -1)
-            break;
-        if(minDegree > degeneracy)
-            degeneracy = minDegree;
-        removed[minVertex] = true;
-        for(auto neighbor : adj[minVertex]){
-            if(!removed[neighbor]){
-                degree[neighbor]--;
-            }
-        }
+        oss << '\n';
     }
-    return degeneracy;
+    return oss.str();
 }
 
-NDGraph buildGraphFromRemovals(int n, const std::vector<Edge>& removals) {
-    NDGraph g(n, true);
-    for(auto &e : removals){
-        g.removeEdge(e.from, e.to);
-    }
-    return g;
-}
-
-} // anonymous namespace
+} // end anonymous namespace
 
 namespace GraphUtils {
 
-std::vector< std::vector<Edge> > generateCombinationsOfSize(const std::vector<Edge>& edges, int k) {
-    std::vector< std::vector<Edge> > result;
-    if(k < 0 || k > (int)edges.size())
-        return result;
-    std::vector<Edge> current;
-    generateCombinationsRecur(edges, 0, k, current, result);
-    return result;
-}
+//------------------------------------------------------------------------------
+// 1) Canonical Label (Simple “in-house nauty” by brute-force permutations)
+//------------------------------------------------------------------------------
 
-// Modified function with progress bar updates per subset and optional progress display
-std::vector<NDGraph> generateAllConnectedGraphsOptimized(int n, bool show_progress) {
-    std::vector<NDGraph> results;
-    if(n <= 0)
-        return results;
-    if(n == 1) {
-        NDGraph g(1, false);
-        int d = computeDegeneracy(g);
-        g.setDegeneracy(d);
-        results.push_back(g);
-        return results;
+std::string getCanonicalLabel(const NDGraph &graph) {
+    int n = graph.getNumNodes();
+    if (n == 0) {
+        // If no nodes, just return something trivial
+        return "";
     }
-    std::vector<Edge> allEdges = getCompleteEdgeList(n);
-    int M = allEdges.size();
-    int minEdges = n - 1;
-    int maxRemovable = M - minEdges;
-    
-    // Compute total iterations: sum_{r=0}^{maxRemovable} C(M, r)
-    unsigned long long totalWork = 0;
-    for(int r = 0; r <= maxRemovable; ++r)
-        totalWork += nCr(M, r);
-    
-    std::set<std::string> canonSet;
-    std::cout << "Processing Connected Optimized Graphs for n = " << n << "\n";
-    ProgressBar pbar(totalWork);
-    
-    unsigned long long workDone = 0;
-    for(int removeCount = 0; removeCount <= maxRemovable; removeCount++){
-        std::vector< std::vector<Edge> > removalSubsets = generateCombinationsOfSize(allEdges, removeCount);
-        for(auto &subset : removalSubsets){
-            NDGraph g = buildGraphFromRemovals(n, subset);
-            if(!g.isConnected())
-                continue;
-            std::string canon = computeCanonicalLabel(g);
-            if(canonSet.find(canon) != canonSet.end())
-                continue;
-            int d = computeDegeneracy(g);
-            g.setDegeneracy(d);
-            canonSet.insert(canon);
-            results.push_back(g);
-            workDone++;
-            if(show_progress) pbar.update(workDone);
-        }
-    }
-    if(show_progress) pbar.finish();
-    return results;
-}
+    // Build the adjacency matrix (size n x n).
+    auto adj = buildAdjMatrix(graph);
 
-std::vector<NDGraph> generateAllBiconnectedGraphsOptimized(int n, bool show_progress) {
-    std::vector<NDGraph> results;
-    if(n <= 0)
-        return results;
-    if(n == 1)
-        return results;
-    std::vector<Edge> allEdges = getCompleteEdgeList(n);
-    int M = allEdges.size();
-    int minEdges = (n <= 2) ? 1 : n;
-    int maxRemovable = M - minEdges;
-    
-    // Compute total iterations: sum_{r=0}^{maxRemovable} C(M, r)
-    unsigned long long totalWork = 0;
-    for(int r = 0; r <= maxRemovable; ++r)
-        totalWork += nCr(M, r);
-    
-    std::set<std::string> canonSet;
-    std::cout << "Processing Biconnected Optimized Graphs for n = " << n << "\n";
-    ProgressBar pbar(totalWork);
-    
-    unsigned long long workDone = 0;
-    for(int removeCount = 0; removeCount <= maxRemovable; removeCount++){
-        std::vector< std::vector<Edge> > removalSubsets = generateCombinationsOfSize(allEdges, removeCount);
-        for(auto &subset : removalSubsets){
-            NDGraph g = buildGraphFromRemovals(n, subset);
-            if(!g.isBiconnected())
-                continue;
-            std::string canon = computeCanonicalLabel(g);
-            if(canonSet.find(canon) != canonSet.end())
-                continue;
-            int d = computeDegeneracy(g);
-            g.setDegeneracy(d);
-            canonSet.insert(canon);
-            results.push_back(g);
-            workDone++;
-            if(show_progress) pbar.update(workDone);
-        }
-    }
-    if(show_progress) pbar.finish();
-    return results;
-}
+    // Generate all permutations of {0, 1, ..., n-1}.
+    std::vector<int> perm(n);
+    std::iota(perm.begin(), perm.end(), 0);
 
-// The non-optimized versions remain unchanged
-std::vector<NDGraph> generateAllConnectedGraphs(int n) {
-    std::vector<NDGraph> results;
-    if(n <= 0) return results;
-    
-    std::vector<Edge> allEdges = getCompleteEdgeList(n);
-    int totalEdges = static_cast<int>(allEdges.size());
-    std::cout << "Processing Connected Non-Opt Graphs for n = " << n << "\n";
-    ProgressBar pbar(1 << totalEdges);
-    for(int subsetMask = 0; subsetMask < (1 << totalEdges); ++subsetMask) {
-        NDGraph g(n, false);
-        for(int bit = 0; bit < totalEdges; ++bit) {
-            if(subsetMask & (1 << bit)) {
-                const auto &edge = allEdges[bit];
-                g.addEdge(edge.from, edge.to);
+    // We'll track the lexicographically minimal adjacency matrix representation
+    // as our canonical label.
+    bool firstTime = true;
+    std::string bestLabel;
+
+    do {
+        std::string matrixStr = adjacencyMatrixString(adj, perm);
+        if (firstTime) {
+            bestLabel = matrixStr;
+            firstTime = false;
+        } else {
+            // Keep whichever is lexicographically smaller
+            if (matrixStr < bestLabel) {
+                bestLabel = matrixStr;
             }
         }
-        if(g.isConnected()) {
-            int d = computeDegeneracy(g);
-            g.setDegeneracy(d);
-            results.push_back(g);
-        }
-        pbar.update(subsetMask);
-    }
-    pbar.finish();
-    return results;
+    } while (std::next_permutation(perm.begin(), perm.end()));
+
+    return bestLabel;
 }
 
-std::vector<NDGraph> generateAllBiconnectedGraphs(int n) {
-    std::vector<NDGraph> results;
-    if(n <= 0) return results;
-    if(n == 1) return results;
-    
-    std::vector<Edge> allEdges = getCompleteEdgeList(n);
-    int totalEdges = static_cast<int>(allEdges.size());
-    std::set<std::string> canonSet;
-    
-    std::cout << "Processing Biconnected Non-Opt Graphs for n = " << n << "\n";
-    ProgressBar pbar(1 << totalEdges);
-    for(int subsetMask = 0; subsetMask < (1 << totalEdges); ++subsetMask) {
-        NDGraph g(n, false);
-        for(int bit = 0; bit < totalEdges; ++bit) {
-            if(subsetMask & (1 << bit)) {
-                const auto &edge = allEdges[bit];
-                g.addEdge(edge.from, edge.to);
+bool areIsomorphic(const NDGraph &g1, const NDGraph &g2) {
+    if (g1.getNumNodes() != g2.getNumNodes() ||
+        g1.getNumEdges() != g2.getNumEdges()) {
+        // Quick rejection: different number of nodes or edges => not isomorphic
+        return false;
+    }
+    // Otherwise, compare canonical forms
+    return (getCanonicalLabel(g1) == getCanonicalLabel(g2));
+}
+
+//------------------------------------------------------------------------------
+// 2) Generate Biconnected Graphs Up to Isomorphism
+//------------------------------------------------------------------------------
+
+std::vector<NDGraph> generateBiconnectedGraphsNoIsomorphism(int numNodes) {
+    std::vector<NDGraph> biconnectedReps;
+    if (numNodes <= 0) {
+        return biconnectedReps;
+    }
+
+    // We'll store canonical forms to detect duplicates
+    std::unordered_set<std::string> seenCanonicalForms;
+    seenCanonicalForms.reserve(1 << (numNodes*(numNodes-1)/2));
+
+    // All possible edges (i < j)
+    std::vector<std::pair<int, int>> possibleEdges;
+    for (int i = 0; i < numNodes; ++i) {
+        for (int j = i + 1; j < numNodes; ++j) {
+            possibleEdges.push_back({i, j});
+        }
+    }
+    int maxEdges = (int)possibleEdges.size();
+    int totalSubsets = 1 << maxEdges;
+
+    for (int mask = 0; mask < totalSubsets; ++mask) {
+        NDGraph g(numNodes, false);
+        // Add edges according to bits in mask
+        for (int e = 0; e < maxEdges; ++e) {
+            if (mask & (1 << e)) {
+                auto &ed = possibleEdges[e];
+                g.addEdge(ed.first, ed.second);
             }
         }
-        if(g.isBiconnected()) {
-            std::string canon = computeCanonicalLabel(g);
-            if(canonSet.find(canon) != canonSet.end())
-                continue;
-            canonSet.insert(canon);
-            int d = computeDegeneracy(g);
-            g.setDegeneracy(d);
-            results.push_back(g);
+        // Check for connectivity + biconnectivity
+        if (g.isConnected() && g.isBiconnected()) {
+            // Compute canonical label
+            std::string cForm = getCanonicalLabel(g);
+            // Insert into set if we haven't seen it
+            if (seenCanonicalForms.find(cForm) == seenCanonicalForms.end()) {
+                seenCanonicalForms.insert(cForm);
+                biconnectedReps.push_back(g);
+            }
         }
-        pbar.update(subsetMask);
     }
-    pbar.finish();
-    return results;
+    return biconnectedReps;
+}
+
+//------------------------------------------------------------------------------
+// 3) Degeneracy
+//------------------------------------------------------------------------------
+
+double computeDegeneracy(const NDGraph &graph) {
+    int n = graph.getNumNodes();
+    // Compute factorial of n
+    unsigned long long factorial = 1ULL;
+    for (int i = 2; i <= n; ++i) {
+        factorial *= i;
+    }
+
+    int automorphismCount = graph.getAutomorphismCount();
+    if (automorphismCount == 0) {
+        throw std::runtime_error("Automorphism count is zero, cannot compute degeneracy.");
+    }
+    
+    double degeneracy = static_cast<double>(factorial) / automorphismCount;
+    return degeneracy;
 }
 
 } // namespace GraphUtils

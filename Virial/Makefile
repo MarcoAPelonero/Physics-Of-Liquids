@@ -34,7 +34,7 @@ $(TEST_TARGET): $(TEST_SRC)
 ifeq ($(findstring bash,$(SHELL)),bash)
 RM = rm -f
 else
-RM = del /F
+RM = rm /F
 endif
 
 clean:
