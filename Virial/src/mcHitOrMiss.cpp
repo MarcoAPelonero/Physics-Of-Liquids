@@ -11,7 +11,7 @@ double monteCarloHitOrMiss(
 )
 {
     // Integrate over [0, 2.5 * sigma]^(dimension * nFreeNodes).
-    double sideLength = 2.5 * sigma;
+    double sideLength = 3.5 * sigma;
     double volume = std::pow(sideLength, dimension * nFreeNodes);
 
     std::mt19937_64 rng(123456789ULL);

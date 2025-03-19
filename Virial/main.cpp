@@ -3,7 +3,6 @@
 #include "graphToIntegrand.hpp"
 #include "mcHitOrMiss.hpp"
 #include "potentials.hpp"
-#include "progressBar.hpp"
 #include <iostream>
 #include <cmath>
 #include <vector>
@@ -55,18 +54,21 @@ int main(int argc, char **argv) {
             virialCoefficients[n] = 0.0;
             continue;
         }
-        std::cout << "Generating biconnected graphs for n=" << n << std::endl;
+        
         std::vector<NDGraph> graphs = GraphUtils::generateBiconnectedGraphsNoIsomorphism(n);
-        std::cout << "Number of biconnected graphs: " << graphs.size() << std::endl;
         
         // Compute the integrals associated to this order
         double integral = 0.0;
-        
+
+        std::cout << "Computing integrals for n=" << n << std::endl;
+        int counter = 0;
+
         for (auto &g : graphs) {
             auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension);
             double estimate = monteCarloHitOrMiss(integrand, dimension, n-1, sigma, nSamples);
             double deg = GraphUtils::computeDegeneracy(g);
             integral += estimate * deg;
+            counter++;
         }
 
         double factor = -(n-1) / ( std::tgamma(n+1) );
