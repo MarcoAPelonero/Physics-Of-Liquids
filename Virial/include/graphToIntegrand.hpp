@@ -31,6 +31,7 @@ using PotentialFunction = std::function<double(double, double, double)>;
  * @param sigma       The sigma parameter for the potential.
  * @param epsilon     The epsilon parameter for the potential.
  * @param dimension   The space dimension (e.g., 2D or 3D).
+ * @param beta        The inverse temperature (default=1.0).
  * @return A std::function that calculates the product of Mayer functions
  *         for all edges in the graph, evaluated at the given coordinates.
  */
@@ -39,7 +40,8 @@ graphToIntegrand(const NDGraph &graph,
                  PotentialFunction potential,
                  double sigma,
                  double epsilon,
-                 int dimension);
+                 int dimension,
+                 double beta = 1.0);
 
 /**
  * @brief The standard Mayer function, f(r) = exp(-U(r)) - 1,
@@ -49,10 +51,10 @@ graphToIntegrand(const NDGraph &graph,
  * Mayer for a pair (r, sigma, epsilon).
  */
 inline double mayerF(double r, double sigma, double epsilon,
-                     const PotentialFunction &potential)
+                     const PotentialFunction &potential, double beta = 1.0)
 {
     const double U = potential(r, sigma, epsilon);
-    return std::exp(-U) - 1.0;
+    return std::exp(-(beta *U)) - 1.0;
 }
 
 #endif // GRAPH_TO_INTEGRAND_HPP

@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Iinclude -std=c++11 -Wall -Wextra -Wpedantic
+CFLAGS = -Iinclude -std=c++17 -Wall -Wextra -Wpedantic
 
 SRC_FILES = $(wildcard src/*.cpp)
 

@@ -29,11 +29,13 @@ graphToIntegrand(const NDGraph &graph,
                  PotentialFunction potential,
                  double sigma,
                  double epsilon,
-                 int dimension)
+                 int dimension,
+                 double beta
+                )
 {
     // We assume node 0 is the "root" and won't appear in the coords array.
     // The coords array then has dimension*(n-1) real numbers.
-    return [graph, potential, sigma, epsilon, dimension](const std::vector<double> &coords) -> double
+    return [graph, potential, sigma, epsilon, dimension, beta](const std::vector<double> &coords) -> double
     {
         double product = 1.0;
         for(const auto &edge : graph.getEdges())
@@ -42,7 +44,7 @@ graphToIntegrand(const NDGraph &graph,
             int j = edge.to;
             double r = distanceFixedNode0(coords, i, j, dimension);
 
-            double f = mayerF(r, sigma, epsilon, potential);
+            double f = mayerF(r, sigma, epsilon, potential, beta);
             product *= f;
         }
         return product;

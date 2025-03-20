@@ -4,7 +4,6 @@
 #include "mcHitOrMiss.hpp"
 #include "potentials.hpp"
 #include <iostream>
-#include <fstream>
 #include <cmath>
 #include <vector>
 
@@ -13,12 +12,10 @@
 int main(int argc, char **argv) {
 
     int order = 3;
-    int nSamples = 20000000;
+    int nSamples = 10000000;
     int dimension = 3;
     double sigma = 1.0;
     double epsilon = 1.0;
-    double T = 1.0;
-    std::string outfileName = "results.txt";
 
     if (argc > 1) {
         order = std::stoi(argv[1]);
@@ -35,21 +32,12 @@ int main(int argc, char **argv) {
     if (argc > 5) {
         epsilon = std::stod(argv[5]);
     }
-    if (argc > 6) {
-        T = std::stod(argv[6]);
-    }
-    if (argc > 7) {
-        outfileName = argv[7];
-    }
 
     std::cout << "Order: " << order << std::endl;
     std::cout << "nSamples: " << nSamples << std::endl;
     std::cout << "Dimension: " << dimension << std::endl;
     std::cout << "Sigma: " << sigma << std::endl;
     std::cout << "Epsilon: " << epsilon << std::endl;
-    std::cout << "T: " << T << std::endl;
-
-    double beta = 1.0 / T;
 
     // Generate Vector of n values to save the virial coefficients computed
     std::vector<double> virialCoefficientsHitOrMiss(order, 0.0);
@@ -58,13 +46,14 @@ int main(int argc, char **argv) {
     // Hard-sphere potential. Sigma is DIAMETER
     PotentialFunction potHS = [](double r, double sigma, double epsilon) {
         // If r < sigma => "infinite" => exp(-U)=0 => f(r)=-1
-      return LJ(r, sigma, epsilon);
+        // else f(r)=0
+        return HS(r, sigma, epsilon);
     };
-
     // Generate all biconnected graphs up to isomorphism
     std::cout << "##########################################" << std::endl;
     std::cout << "Running Hit or Miss Monte Carlo Integration" << std::endl;
     std::cout << "##########################################" << std::endl;
+    std::cout << std::endl;
 
     for (int n = 0; n<=order; ++n) {
         if (n < 2) {
@@ -77,10 +66,11 @@ int main(int argc, char **argv) {
         // Compute the integrals associated to this order
         double integral = 0.0;
 
+        std::cout << "Computing integrals for n=" << n << std::endl;
         int counter = 0;
 
         for (auto &g : graphs) {
-            auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension, beta);
+            auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension);
             double estimate = monteCarloHitOrMiss(integrand, dimension, n-1, sigma, nSamples);
             double deg = GraphUtils::computeDegeneracy(g);
             integral += estimate * deg;
@@ -90,27 +80,70 @@ int main(int argc, char **argv) {
         double factor = -(n-1) / ( std::tgamma(n+1) );
         
         double finalContribution = factor * integral;
+        std::cout << "Final contribution for n=" << n << ": " << finalContribution << std::endl;
         virialCoefficientsHitOrMiss[n] = finalContribution;
     }
+    std::cout << std::endl;
 
-    // Print on an outfile the results
-    std::ofstream outfile(outfileName);
-    outfile << "Virial coefficients in terms of the packing fraction:" << std::endl;
-    outfile << "T* = " << T << std::endl;
+    std::cout << "##########################################" << std::endl;
+    std::cout << "Running Monte Carlo Metropolis Integration" << std::endl;
+    std::cout << "##########################################" << std::endl;
+    std::cout << std::endl;
 
-    double coeff = (M_PI / 3.0) * 2;
-    double v0 = coeff * sigma * sigma * sigma;
+    for (int n = 0; n<=order; ++n) {
+        if (n < 2) {
+            virialCoefficientsMetropolis[n] = 0.0;
+            continue;
+        }
+        
+        std::vector<NDGraph> graphs = GraphUtils::generateBiconnectedGraphsNoIsomorphism(n);
+        
+        // Compute the integrals associated to this order
+        double integral = 0.0;
+
+        std::cout << "Computing integrals for n=" << n << std::endl;
+        int counter = 0;
+
+        for (auto &g : graphs) {
+            auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension);
+            double estimate = monteCarloMayerMetropolis(integrand, dimension, n-1, sigma, nSamples);
+            double deg = GraphUtils::computeDegeneracy(g);
+            integral += estimate * deg;
+            counter++;
+        }
+
+        double factor = -(n-1) / ( std::tgamma(n+1) );
+        
+        double finalContribution = factor * integral;
+        std::cout << "Final contribution for n=" << n << ": " << finalContribution << std::endl;
+        virialCoefficientsMetropolis[n] = finalContribution;
+    }
+
+    std::cout << "Virial coefficients in terms of the packing fraction:" << std::endl;
     
-    for (int i = 0; i <= order; ++i) {
-        outfile << "n=" << i << ": ";
-        if (i < 2) {
-            outfile << "0 " << std::endl;
+    double v0 = (M_PI/6) * sigma * sigma * sigma;
+    std::cout << "Hit or Miss: ";
+    for(int i = 0; i <= order; ++i) {
+        if (i<2) {
+            std::cout << "0 ";
             continue;
         }
         double term = std::pow(v0, i-1);
         double virialCoefficient = virialCoefficientsHitOrMiss[i] / term;
-        outfile << virialCoefficient << " " << std::endl;
-
+        std::cout << virialCoefficient << " ";
     }
+    std::cout << std::endl;
+    std::cout << "Metropolis: ";
+    for(int i = 0; i <= order; ++i) {
+        if (i<2) {
+            std::cout << "0 ";
+            continue;
+        }
+        double term = std::pow(v0, i-1);
+        double virialCoefficient = virialCoefficientsMetropolis[i] / term;
+        std::cout << virialCoefficient << " ";
+    }
+    std::cout << std::endl;
+
     return 0;
 }
