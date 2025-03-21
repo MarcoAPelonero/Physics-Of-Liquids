@@ -1,6 +1,7 @@
 #include "graph.hpp"
 #include "graphUtils.hpp"
 #include "graphToIntegrand.hpp"
+#include "mayerSampling.hpp"
 #include "MonteCarlo.hpp"
 #include "potentials.hpp"
 #include <iostream>
@@ -51,37 +52,53 @@ int main(int argc, char **argv) {
 
     double beta = 1.0 / T;
 
-    // Generate Vector of n values to save the virial coefficients computed
-    std::vector<double> virialCoefficientsHitOrMiss(order, 0.0);
-    std::vector<double> virialCoefficientsMetropolis(order, 0.0);
+    std::vector<double> virialCoefficientsMayerMetropolis(order, 0.0);
+    std::vector<double> virialCoefficientsHardSpheres(10, 0.0);
 
-    // Hard-sphere potential. Sigma is DIAMETER
-    PotentialFunction potHS = [](double r, double sigma, double epsilon) {
-        // If r < sigma => "infinite" => exp(-U)=0 => f(r)=-1
+    // Define the reference values for the HS potential
+
+    virialCoefficientsHardSpheres[0] = 0.0; 
+    virialCoefficientsHardSpheres[1] = 0.0; 
+    virialCoefficientsHardSpheres[2] = 4.0; 
+    virialCoefficientsHardSpheres[4] = 10.0;
+    virialCoefficientsHardSpheres[5] = 18.365;
+    virialCoefficientsHardSpheres[6] = 28.244;
+    virialCoefficientsHardSpheres[7] = 39.82;
+    virialCoefficientsHardSpheres[8] = 53.34;
+    virialCoefficientsHardSpheres[9] = 68.54;
+
+    PotentialFunction potential = [](double r, double sigma, double epsilon) {
       return LJ(r, sigma, epsilon);
     };
+    PotentialFunction referencePotential = [](double r, double sigma, double epsilon) {
+        return HS(r,sigma,epsilon);
+    };
 
-    // Generate all biconnected graphs up to isomorphism
-    std::cout << "##########################################" << std::endl;
-    std::cout << "Running Hit or Miss Monte Carlo Integration" << std::endl;
-    std::cout << "##########################################" << std::endl;
+    // Compute all biconnected graphs for each order
 
     for (int n = 0; n<=order; ++n) {
         if (n < 2) {
-            virialCoefficientsHitOrMiss[n] = 0.0;
+            virialCoefficientsMayerMetropolis[n] = 0.0;
             continue;
         }
         
         std::vector<NDGraph> graphs = GraphUtils::generateBiconnectedGraphsNoIsomorphism(n);
         
-        // Compute the integrals associated to this order
         double integral = 0.0;
 
         int counter = 0;
 
         for (auto &g : graphs) {
-            auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension, beta);
-            double estimate = monteCarloHitOrMiss(integrand, dimension, n-1, sigma, nSamples);
+            auto [integrandFull, integrandRef, config] = createIntegrandsAndConfig(
+                g,
+                potential,
+                referencePotential,
+                sigma,
+                epsilon,
+                dimension,
+                beta
+            );
+            
             double deg = GraphUtils::computeDegeneracy(g);
             integral += estimate * deg;
             counter++;
@@ -90,27 +107,8 @@ int main(int argc, char **argv) {
         double factor = -(n-1) / ( std::tgamma(n+1) );
         
         double finalContribution = factor * integral;
-        virialCoefficientsHitOrMiss[n] = finalContribution;
+        virialCoefficientsMayerMetropolis[n] = finalContribution;
     }
 
-    // Print on an outfile the results
-    std::ofstream outfile(outfileName);
-    outfile << "Virial coefficients in terms of the packing fraction:" << std::endl;
-    outfile << "T* = " << T << std::endl;
-
-    double coeff = (M_PI / 3.0) * 2;
-    double v0 = coeff * sigma * sigma * sigma;
-    
-    for (int i = 0; i <= order; ++i) {
-        outfile << "n=" << i << ": ";
-        if (i < 2) {
-            outfile << "0 " << std::endl;
-            continue;
-        }
-        double term = std::pow(v0, i-1);
-        double virialCoefficient = virialCoefficientsHitOrMiss[i] / term;
-        outfile << virialCoefficient << " " << std::endl;
-
-    }
     return 0;
 }
