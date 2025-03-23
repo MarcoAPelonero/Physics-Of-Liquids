@@ -44,8 +44,8 @@ int main(int argc, char* argv[])
         for (auto &graph : graphs) {
             // Use the integration library via computeGraphIntegral
             double graphIntegral = computeGraphIntegral(
-                graph,     // The graph
-                R,         // half-width for 3D sampling (each free node is in [-R,R]^3)
+                graph,     
+                R,         
                 epsilon,
                 sigma,
                 kb,
@@ -56,7 +56,6 @@ int main(int argc, char* argv[])
             int numEdges = graph.getNumEdges();
             int automorphismCount = graph.getAutomorphismCount(); // Automorphism-based symmetry factor
 
-            // Compute factorial for (n-1)!
             double factorial = 1.0;
             for (int i = 1; i <= n-1; ++i) {
                 factorial *= i;
