@@ -4,6 +4,7 @@
 #include <functional>
 #include <vector>
 #include <cmath>
+#include "mayerSampling.hpp"
 
 double monteCarloHitOrMiss(
     const std::function<double(const std::vector<double>&)>& integrand,
@@ -13,14 +14,14 @@ double monteCarloHitOrMiss(
     long nSamples
 );
 
-double MonteCarloMetropolisMayer(
-    const std::function<double(const std::vector<double>&)>& integrandFull,
-    const std::function<double(const std::vector<double>&)>& integrandRef,
+double MonteCarloMayerMetropolis(
+    Configuration config,
+    const std::function<double(const std::vector<double>&)>& integrand,
+    const std::function<double(const std::vector<double>&)>& referenceIntegrand, // fixed name
     int dimension,
-    int nFreeNodes,  // (nNodes - 1)
+    int nFreeNodes, 
     double sigma,
-    long nSamples,
-    bool useBridging   // if true, use the alpha–bridging procedure; otherwise, use a “direct” Metropolis sampling of the full integrand.
+    long nSamples
 );
 
 #endif

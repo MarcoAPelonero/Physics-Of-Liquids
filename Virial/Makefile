@@ -31,6 +31,13 @@ endif
 $(TEST_TARGET): $(TEST_SRC)
 	$(CC) $(CFLAGS) $(TEST_SRC) -o $(TEST_TARGET)
 
+runsim:
+ifndef SIM
+	$(error Please specify a simulation name with SIM=<name> for runsim)
+endif
+	$(CC) $(CFLAGS) $(SIM)Simulation.cpp $(SRC_FILES) -o $(SIM)Simulation.exe
+	./$(SIM)Simulation.exe
+
 ifeq ($(findstring bash,$(SHELL)),bash)
 RM = rm -f
 else

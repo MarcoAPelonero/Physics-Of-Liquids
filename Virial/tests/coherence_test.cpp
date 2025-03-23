@@ -1,7 +1,7 @@
 #include "graph.hpp"
 #include "graphUtils.hpp"
 #include "graphToIntegrand.hpp"
-#include "mcHitOrMiss.hpp"
+#include "MonteCarlo.hpp"
 #include "potentials.hpp"
 #include <iostream>
 #include <cmath>
@@ -41,7 +41,6 @@ int main(int argc, char **argv) {
 
     // Generate Vector of n values to save the virial coefficients computed
     std::vector<double> virialCoefficientsHitOrMiss(order, 0.0);
-    std::vector<double> virialCoefficientsMetropolis(order, 0.0);
 
     // Hard-sphere potential. Sigma is DIAMETER
     PotentialFunction potHS = [](double r, double sigma, double epsilon) {
@@ -85,40 +84,6 @@ int main(int argc, char **argv) {
     }
     std::cout << std::endl;
 
-    std::cout << "##########################################" << std::endl;
-    std::cout << "Running Monte Carlo Metropolis Integration" << std::endl;
-    std::cout << "##########################################" << std::endl;
-    std::cout << std::endl;
-
-    for (int n = 0; n<=order; ++n) {
-        if (n < 2) {
-            virialCoefficientsMetropolis[n] = 0.0;
-            continue;
-        }
-        
-        std::vector<NDGraph> graphs = GraphUtils::generateBiconnectedGraphsNoIsomorphism(n);
-        
-        // Compute the integrals associated to this order
-        double integral = 0.0;
-
-        std::cout << "Computing integrals for n=" << n << std::endl;
-        int counter = 0;
-
-        for (auto &g : graphs) {
-            auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension);
-            double estimate = monteCarloMayerMetropolis(integrand, dimension, n-1, sigma, nSamples);
-            double deg = GraphUtils::computeDegeneracy(g);
-            integral += estimate * deg;
-            counter++;
-        }
-
-        double factor = -(n-1) / ( std::tgamma(n+1) );
-        
-        double finalContribution = factor * integral;
-        std::cout << "Final contribution for n=" << n << ": " << finalContribution << std::endl;
-        virialCoefficientsMetropolis[n] = finalContribution;
-    }
-
     std::cout << "Virial coefficients in terms of the packing fraction:" << std::endl;
     
     double v0 = (M_PI/6) * sigma * sigma * sigma;
@@ -132,18 +97,6 @@ int main(int argc, char **argv) {
         double virialCoefficient = virialCoefficientsHitOrMiss[i] / term;
         std::cout << virialCoefficient << " ";
     }
-    std::cout << std::endl;
-    std::cout << "Metropolis: ";
-    for(int i = 0; i <= order; ++i) {
-        if (i<2) {
-            std::cout << "0 ";
-            continue;
-        }
-        double term = std::pow(v0, i-1);
-        double virialCoefficient = virialCoefficientsMetropolis[i] / term;
-        std::cout << virialCoefficient << " ";
-    }
-    std::cout << std::endl;
 
     return 0;
 }

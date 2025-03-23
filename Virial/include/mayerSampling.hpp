@@ -4,10 +4,12 @@
 #include <vector>
 #include <random>
 #include <cmath>
-#include "graphToIntegrand.hpp"  
-#include "potentials.hpp"  
+#include "graphToIntegrand.hpp"
+#include "potentials.hpp"
 #include <functional>
 #include <tuple>
+
+#define M_PI 3.14159265358979323846
 
 class Configuration {
 private:
@@ -15,12 +17,14 @@ private:
     int numFreeNodes;             // Number of movable nodes (n-1 if total is n).
     double sigma;                 // Particle size parameter.
     double sideLength;            // Box side length (if needed).
-    std::vector<std::vector<double>> positions; // Positions of the free nodes only!
+    std::vector<double> positions; // Now a single vector with length = numFreeNodes * dimension.
     std::mt19937_64 rng;          // Random number generator.
 
 public:
-    // Constructor that expects the number of *free* nodes. 
+    // Constructor that expects the number of *free* nodes.
     Configuration(int dimension, int numFreeNodes, double sigma);
+    // Added copy constructor
+    Configuration(const Configuration &other) = default;
 
     // Random initialization (only for the free nodes).
     void initialRandom();
@@ -28,29 +32,28 @@ public:
     // Lattice initialization (only for the free nodes).
     void initialLattice();
 
-    // Getter for the free-node positions (each entry has 'dimension' coords).
-    const std::vector<std::vector<double>> &getPositions() const;
+    Configuration& operator=(const Configuration &other) {
+        dimension = other.dimension;
+        numFreeNodes = other.numFreeNodes;
+        sigma = other.sigma;
+        sideLength = other.sideLength;
+        positions = other.positions;
+        rng = other.rng;
+        return *this;
+    }
+    // Randomly move one particle by up to ±delta in each dimension.
+    void moveRandomParticle(double delta);
+
+    // Compute a user-supplied integrand on this configuration.
+    double computeIntegrandOnConfiguration(const std::function<double(const std::vector<double>&)> &integrand) const;
+
+    // Getter for the single-vector positions
+    // (x1, y1, z1, x2, y2, z2, ...)
+    void setPositions(std::vector<double> &newPositions);
+    const std::vector<double> &getPositions() const;
 };
 
-// Suppose you have these signatures in "graphToIntegrand.hpp":
-//
-// struct NDGraph {
-//     int getNumNodes() const;  // or getNumberOfNodes()
-//     const std::vector<Edge> &getEdges() const;
-//     ...
-// };
-//
-// double distanceFixedNode0(const std::vector<double> &coords,
-//                           int i, int j,
-//                           int dimension);
-//
-// double mayerF(double r, double sigma, double epsilon,
-//               PotentialFunction potential, double beta);
-//
-// using PotentialFunction = double(*)(double r, double sigma, double epsilon);
-//
-// or you can use std::function<double(double,double,double)> if you prefer.
-
+// Create integrands and config, as before.
 std::tuple<
     std::function<double(const std::vector<double>&)>, // integrand for "full" potential
     std::function<double(const std::vector<double>&)>, // integrand for "reference" potential
@@ -63,5 +66,17 @@ createIntegrandsAndConfig(const NDGraph &graph,
                           double epsilon,
                           int dimension,
                           double beta);
+
+
+class HardSpheresCoefficients {
+    private:
+        std::vector<double> coefficients;
+    public:
+        HardSpheresCoefficients();
+
+        void changeForm(double sigma);
+
+        double operator[](int i) const;
+};
 
 #endif // MAYER_SAMPLING_HPP

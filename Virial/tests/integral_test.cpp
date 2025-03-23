@@ -3,7 +3,7 @@
 #include "graph.hpp"
 #include "graphUtils.hpp"
 #include "graphToIntegrand.hpp"
-#include "mcHitOrMiss.hpp"
+#include "MonteCarlo.hpp"
 #include "potentials.hpp"
 
 int main()

@@ -1,79 +1,116 @@
 #include "graph.hpp"
 #include "graphUtils.hpp"
-#include "integration.hpp"
-#include "graphToIntegral.hpp"
-#include <chrono>
+#include "graphToIntegrand.hpp"
+#include "MonteCarlo.hpp"
+#include "potentials.hpp"
 #include <iostream>
 #include <fstream>
-#include <cstdlib>
-#include <vector>
-#include <string>
 #include <cmath>
-#include <iomanip>
+#include <vector>
 
-int main(int argc, char* argv[])
-{
-    if (argc < 5) {
-        std::cerr << "Usage: " << argv[0] 
-                  << " <max_order> <T> <range_R> <numSamples>\n";
-        return 1;
-    }
+#define M_PI 3.14159265358979323846
 
-    int    maxOrder   = std::atoi(argv[1]);
-    double T          = std::atof(argv[2]);
-    double R          = std::atof(argv[3]);  // half-side for [-R,R] in 3D
-    int    numSamples = std::atoi(argv[4]);
+int main(int argc, char **argv) {
 
-    // Lennard-Jones parameters in reduced units
+    int order = 3;
+    int nSamples = 20000000;
+    int dimension = 3;
+    double sigma = 1.0;
     double epsilon = 1.0;
-    double sigma   = 1.0;
-    double kb      = 1.0;
+    double T = 1.0;
+    std::string outfileName = "results.txt";
 
-    std::ofstream outFile("virial_coefficients.txt");
-    if (!outFile.is_open()) {
-        std::cerr << "Error: could not open output file\n";
-        return 1;
+    if (argc > 1) {
+        order = std::stoi(argv[1]);
+    }
+    if (argc > 2) {
+        nSamples = std::stoi(argv[2]);
+    }
+    if (argc > 3) {
+        dimension = std::stoi(argv[3]);
+    }
+    if (argc > 4) {
+        sigma = std::stod(argv[4]);
+    }
+    if (argc > 5) {
+        epsilon = std::stod(argv[5]);
+    }
+    if (argc > 6) {
+        T = std::stod(argv[6]);
+    }
+    if (argc > 7) {
+        outfileName = argv[7];
     }
 
-    // Compute from n=2 up to maxOrder (n=1 is trivial: integral=1)
-    for (int n = 2; n <= maxOrder; n++) {
-        // Generate the graphs (assuming generateAllBiconnectedGraphsOptimized is defined properly)
-        auto graphs = GraphUtils::generateAllBiconnectedGraphsOptimized(n, false);
+    std::cout << "Order: " << order << std::endl;
+    std::cout << "nSamples: " << nSamples << std::endl;
+    std::cout << "Dimension: " << dimension << std::endl;
+    std::cout << "Sigma: " << sigma << std::endl;
+    std::cout << "Epsilon: " << epsilon << std::endl;
+    std::cout << "T: " << T << std::endl;
 
-        double Bn = 0.0;
-        for (auto &graph : graphs) {
-            // Use the integration library via computeGraphIntegral
-            double graphIntegral = computeGraphIntegral(
-                graph,     
-                R,         
-                epsilon,
-                sigma,
-                kb,
-                T,
-                numSamples // Number of Monte Carlo samples
-            );
+    double beta = 1.0 / T;
 
-            int numEdges = graph.getNumEdges();
-            int automorphismCount = graph.getAutomorphismCount(); // Automorphism-based symmetry factor
- 
-            double factorial = 1.0;
-            for (int i = 1; i <= n-1; ++i) {
-                factorial *= i;
-            }
+    // Generate Vector of n values to save the virial coefficients computed
+    std::vector<double> virialCoefficientsHitOrMiss(order, 0.0);
+    std::vector<double> virialCoefficientsMetropolis(order, 0.0);
 
-            // Standard factor: (-1)^(numEdges) / ((n-1)! * symmetryFactor)
-            double weight = std::pow(-1.0, numEdges) / (factorial * automorphismCount);
+    // Hard-sphere potential. Sigma is DIAMETER
+    PotentialFunction potHS = [](double r, double sigma, double epsilon) {
+        // If r < sigma => "infinite" => exp(-U)=0 => f(r)=-1
+      return LJ(r, sigma, epsilon);
+    };
 
-            Bn += weight * graphIntegral;
+    // Generate all biconnected graphs up to isomorphism
+    std::cout << "##########################################" << std::endl;
+    std::cout << "Running Hit or Miss Monte Carlo Integration" << std::endl;
+    std::cout << "##########################################" << std::endl;
+
+    for (int n = 0; n<=order; ++n) {
+        if (n < 2) {
+            virialCoefficientsHitOrMiss[n] = 0.0;
+            continue;
+        }
+        
+        std::vector<NDGraph> graphs = GraphUtils::generateBiconnectedGraphsNoIsomorphism(n);
+        
+        // Compute the integrals associated to this order
+        double integral = 0.0;
+
+        int counter = 0;
+
+        for (auto &g : graphs) {
+            auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension, beta);
+            double estimate = monteCarloHitOrMiss(integrand, dimension, n-1, sigma, nSamples);
+            double deg = GraphUtils::computeDegeneracy(g);
+            integral += estimate * deg;
+            counter++;
         }
 
-        // Output the virial coefficient for order n.
-        outFile << std::fixed << std::setprecision(12) << n << " " << Bn << "\n";
-        std::cout << std::fixed << std::setprecision(12)
-                  << "Computed virial coefficient for n = " << n 
-                  << ": " << Bn << "\n";
+        double factor = -(n-1) / ( std::tgamma(n+1) );
+        
+        double finalContribution = factor * integral;
+        virialCoefficientsHitOrMiss[n] = finalContribution;
     }
 
-    outFile.close();
+    // Print on an outfile the results
+    std::ofstream outfile(outfileName);
+    outfile << "Virial coefficients in terms of the packing fraction:" << std::endl;
+    outfile << "T* = " << T << std::endl;
+
+    double coeff = (M_PI / 3.0) * 2;
+    double v0 = coeff * sigma * sigma * sigma;
+    
+    for (int i = 0; i <= order; ++i) {
+        outfile << "n=" << i << ": ";
+        if (i < 2) {
+            outfile << "0 " << std::endl;
+            continue;
+        }
+        double term = std::pow(v0, i-1);
+        double virialCoefficient = virialCoefficientsHitOrMiss[i] / term;
+        outfile << virialCoefficient << " " << std::endl;
+
+    }
     return 0;
 }
