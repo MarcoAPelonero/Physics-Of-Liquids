@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
 
             int numEdges = graph.getNumEdges();
             int automorphismCount = graph.getAutomorphismCount(); // Automorphism-based symmetry factor
-
+ 
             double factorial = 1.0;
             for (int i = 1; i <= n-1; ++i) {
                 factorial *= i;

@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Iinclude -std=c++11 -Wall -Wextra -Wpedantic
+CFLAGS = -Iinclude -std=c++17 -Wall -Wextra -Wpedantic
 
 SRC_FILES = $(wildcard src/*.cpp)
 
@@ -34,7 +34,7 @@ $(TEST_TARGET): $(TEST_SRC)
 ifeq ($(findstring bash,$(SHELL)),bash)
 RM = rm -f
 else
-RM = del /F
+RM = rm /F
 endif
 
 clean:

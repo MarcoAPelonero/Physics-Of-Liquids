@@ -2,45 +2,48 @@
 
 #include <algorithm>
 #include <set>
+#include <numeric>
 #include <vector>
 
 int NDGraph::getAutomorphismCount() const {
-    int numNodes = getNumNodes();
-    if (numNodes <= 1) return 1;
+    int n = getNumNodes();
+    if (n == 0) {
+        // An empty graph technically has 1 automorphism (the empty permutation).
+        return 1;
+    }
+    // For n=1, there's only 1 automorphism (the identity).
+    if (n == 1) {
+        return 1;
+    }
 
-    // Create original edge set as sorted pairs
+    // Build the original edge set as sorted pairs
     std::set<std::pair<int, int>> originalEdges;
-    for (const auto& edge : edges) {
-        int u = edge.from, v = edge.to;
+    for (const auto &edge : edges) {
+        int u = edge.from;
+        int v = edge.to;
         if (u > v) std::swap(u, v);
         originalEdges.insert({u, v});
     }
 
-    // Generate permutations of non-fixed nodes (1..numNodes-1)
-    std::vector<int> nonFixedNodes;
-    for (int i = 1; i < numNodes; ++i)
-        nonFixedNodes.push_back(i);
-    
+    // Generate all permutations of nodes: [0,1,2,...,n-1]
+    std::vector<int> permutation(n);
+    std::iota(permutation.begin(), permutation.end(), 0);
+
     int count = 0;
     do {
-        // Create node mapping: old -> new
-        std::vector<int> nodeMap(numNodes);
-        nodeMap[0] = 0;
-        for (size_t i = 0; i < nonFixedNodes.size(); ++i)
-            nodeMap[i+1] = nonFixedNodes[i];
-
-        // Apply permutation to edges
-        std::set<std::pair<int, int>> permutedEdges;
-        for (const auto& edge : edges) {
-            int u = nodeMap[edge.from];
-            int v = nodeMap[edge.to];
+        // Apply this permutation to the edges
+        std::set<std::pair<int, int>> permEdges;
+        for (const auto &edge : edges) {
+            int u = permutation[edge.from];
+            int v = permutation[edge.to];
             if (u > v) std::swap(u, v);
-            permutedEdges.insert({u, v});
+            permEdges.insert({u, v});
         }
-
-        if (permutedEdges == originalEdges)
-            ++count;
-    } while (std::next_permutation(nonFixedNodes.begin(), nonFixedNodes.end()));
+        // Compare with the originalEdges
+        if (permEdges == originalEdges) {
+            count++;
+        }
+    } while (std::next_permutation(permutation.begin(), permutation.end()));
 
     return count;
 }
@@ -185,7 +188,22 @@ bool NDGraph::isBiconnected() const {
     return std::none_of(isArticulation.begin(), isArticulation.end(), [](bool flag) { return flag; });
 }
 
-
+bool NDGraph::operator==(const NDGraph &other) const {
+    if (nodes.size() != other.nodes.size() || edges.size() != other.edges.size()) {
+        return false;
+    }
+    for (const auto &node : nodes) {
+        if (std::find(other.nodes.begin(), other.nodes.end(), node) == other.nodes.end()) {
+            return false;
+        }
+    }
+    for (const auto &edge : edges) {
+        if (std::find(other.edges.begin(), other.edges.end(), edge) == other.edges.end()) {
+            return false;
+        }
+    }
+    return true;
+}
 
 void NDGraph::printGraph() const {
     std::cout << "Graph Nodes: ";
