@@ -14,8 +14,8 @@
 
 int main(int argc, char **argv) {
 
-    int order = 3;
-    int nSamples = 100000;
+    int order = 2;
+    int nSamples = 1000000;
     int dimension = 3;
     double sigma = 1.0;
     double epsilon = 1.0;
@@ -93,9 +93,6 @@ int main(int argc, char **argv) {
                 config,
                 integrandFull,
                 integrandRef,
-                dimension,
-                n-1,
-                sigma,
                 nSamples
             );
 

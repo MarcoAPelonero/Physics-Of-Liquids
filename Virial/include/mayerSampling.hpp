@@ -49,6 +49,7 @@ public:
 
     // Getter for the single-vector positions
     // (x1, y1, z1, x2, y2, z2, ...)
+    double getSideLength() const;
     void setPositions(std::vector<double> &newPositions);
     const std::vector<double> &getPositions() const;
 };

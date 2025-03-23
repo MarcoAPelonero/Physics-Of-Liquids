@@ -17,10 +17,7 @@ double monteCarloHitOrMiss(
 double MonteCarloMayerMetropolis(
     Configuration config,
     const std::function<double(const std::vector<double>&)>& integrand,
-    const std::function<double(const std::vector<double>&)>& referenceIntegrand, // fixed name
-    int dimension,
-    int nFreeNodes, 
-    double sigma,
+    const std::function<double(const std::vector<double>&)>& referenceIntegrand, 
     long nSamples
 );
 

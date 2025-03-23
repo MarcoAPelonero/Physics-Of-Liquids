@@ -52,8 +52,8 @@ int main(int argc, char **argv) {
     double beta = 1.0 / T;
 
     // Generate Vector of n values to save the virial coefficients computed
-    std::vector<double> virialCoefficientsHitOrMiss(order, 0.0);
-    std::vector<double> virialCoefficientsMetropolis(order, 0.0);
+    std::vector<double> virialCoefficientsHitOrMiss(order + 1, 0.0);
+    std::vector<double> virialCoefficientsMetropolis(order + 1, 0.0);
 
     // Hard-sphere potential. Sigma is DIAMETER
     PotentialFunction potHS = [](double r, double sigma, double epsilon) {
@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
         int counter = 0;
 
         for (auto &g : graphs) {
-            auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension, beta);
+            auto integrand = graphToIntegrand(g, potHS, sigma, epsilon, dimension, beta, 5.0*sigma);
             double estimate = monteCarloHitOrMiss(integrand, dimension, n-1, sigma, nSamples);
             double deg = GraphUtils::computeDegeneracy(g);
             integral += estimate * deg;

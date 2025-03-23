@@ -2,6 +2,7 @@
 #include <random>
 #include <cmath>
 #include <iostream> // <-- add this include for printing
+#include <fstream>
 
 double monteCarloHitOrMiss(
     const std::function<double(const std::vector<double>&)>& integrand,
@@ -37,27 +38,29 @@ double monteCarloHitOrMiss(
 double MonteCarloMayerMetropolis(
     Configuration config,
     const std::function<double(const std::vector<double>&)>& integrand,
-    const std::function<double(const std::vector<double>&)>& referenceIntegrand, // fixed name
-    int dimension,
-    int nFreeNodes, 
-    double sigma,
+    const std::function<double(const std::vector<double>&)>& referenceIntegrand,  
     long nSamples
 )
 {
-    (void) dimension;
-    (void) nFreeNodes;
-    (void) sigma;
-
-    double delta = 0.01;
+    // Add print out on analysis file for debugging purposes
+    std::cout << "Starting Monte Carlo Mayer Metropolis" << std::endl;
+    std::ofstream analysisFile("analysis.txt");
+    
+    double delta = 0.05;
     double s_total = 0.0;
     double sRef_total = 0.0;
 
     std::mt19937_64 rng(123456789ULL);
-    std::uniform_real_distribution<double> uniformDist(0.0, 1.0);
+    std::uniform_real_distribution<double> uniformDist(-1.0, 1.0);  
+    std::uniform_real_distribution<double> uniformZeroOne(0.0, 1.0);
 
-    // Initialize the lattice configuration.
-    config.initialLattice();    
-    
+    // Helper lambda to compute the ratio in a more readable way.
+    auto computeRatio = [](double value, double absValue) -> double {
+        if (absValue > 0.0)
+            return value / absValue;
+        return 0.0;
+    };
+
     for (long i = 0; i < nSamples; ++i)
     {
         std::vector<double> oldPositions = config.getPositions();
@@ -68,25 +71,27 @@ double MonteCarloMayerMetropolis(
         double proposedIntegrand = config.computeIntegrandOnConfiguration(integrand);
         double absProposed = std::abs(proposedIntegrand);
 
-        double acceptanceProb = (absCurrent > 0.0) ? std::min(1.0, absProposed / absCurrent) : 1.0;
+        double acceptanceProb = std::min(1.0, absProposed / absCurrent);
 
-        if (uniformDist(rng) >= acceptanceProb)
+        if (uniformZeroOne(rng) >= acceptanceProb)
         {
             config.setPositions(oldPositions);
             double refValue = config.computeIntegrandOnConfiguration(referenceIntegrand);
-            double s   = (absCurrent > 0.0) ? currentIntegrand / absCurrent : 0.0;
-            double sRef = (absCurrent > 0.0) ? refValue / absCurrent : 0.0;
+            double s = computeRatio(currentIntegrand, absCurrent);
+            double sRef = computeRatio(refValue, absCurrent);
             s_total  += s;
             sRef_total += sRef;
+            
         }
         else
         {
             double refValue = config.computeIntegrandOnConfiguration(referenceIntegrand);
-            double s   = (absProposed > 0.0) ? proposedIntegrand / absProposed : 0.0;
-            double sRef = (absProposed > 0.0) ? refValue / absProposed : 0.0;
+            double s = computeRatio(proposedIntegrand, absProposed);
+            double sRef = computeRatio(refValue, absProposed);
             s_total  += s;
             sRef_total += sRef;
         }
+        analysisFile << i << " " << s_total << " " << sRef_total << std::endl;
     }
     double averageS = s_total / static_cast<double>(nSamples);
     double averageSRef = sRef_total / static_cast<double>(nSamples);

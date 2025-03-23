@@ -37,11 +37,12 @@ using PotentialFunction = std::function<double(double, double, double)>;
  */
 std::function<double(const std::vector<double> &)>
 graphToIntegrand(const NDGraph &graph,
-                 PotentialFunction potential,
-                 double sigma,
-                 double epsilon,
-                 int dimension,
-                 double beta = 1.0);
+    PotentialFunction potential,
+    double sigma,
+    double epsilon,
+    int dimension,
+    double beta,
+    double sideLength);
 
 /**
  * @brief The standard Mayer function, f(r) = exp(-U(r)) - 1,

@@ -20,6 +20,11 @@ def main():
     epsilon = 1.0
     T_list = [0.625, 0.75, 1.0, 1.2, 1.3, 1.4, 1.5, 2.0, 2.5, 5.0, 10.0]
 
+    # If it exists delte previous output folder
+    if os.path.exists("output"):
+        import shutil
+        shutil.rmtree("output")
+
     os.makedirs("output", exist_ok=True)
     
     # Build initial queue of jobs. Each item is (cmd, T_val, retries).

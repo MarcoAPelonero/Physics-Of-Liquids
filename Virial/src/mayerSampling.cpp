@@ -4,7 +4,7 @@ Configuration::Configuration(int dimension, int numFreeNodes, double sigma)
     : dimension(dimension),
       numFreeNodes(numFreeNodes),
       sigma(sigma),
-      sideLength(5.0 * sigma), // Example choice
+      sideLength(5 * sigma), // Example choice
       rng(123456789ULL)
 {
     // positions has length = (n-1) * dimension
@@ -61,17 +61,23 @@ void Configuration::moveRandomParticle(double delta) {
     std::uniform_int_distribution<int> intDist(0, numFreeNodes - 1);
     int particle = intDist(rng);
 
-    // Generate a random number in [-1,1] for each dimension.
+    // Generate a random number in [-1, 1] for each dimension.
     std::uniform_real_distribution<double> realDist(-1.0, 1.0);
+    double halfSide = sideLength / 2.0;
 
     for (int d = 0; d < dimension; ++d) {
         int idx = particle * dimension + d;
-        positions[idx] += delta * realDist(rng);
+        // Propose a new position.
+        double newPos = positions[idx] + delta * realDist(rng);
 
-        // Periodic boundary conditions
-        double halfSide = sideLength / 2.0;
-        while (positions[idx] >  halfSide) positions[idx] -= sideLength;
-        while (positions[idx] < -halfSide) positions[idx] += sideLength;
+        // Apply periodic boundary conditions by wrapping the coordinate.
+        while (newPos > halfSide) {
+            newPos -= sideLength;
+        }
+        while (newPos < -halfSide) {
+            newPos += sideLength;
+        }
+        positions[idx] = newPos;
     }
 }
 
@@ -79,6 +85,11 @@ double Configuration::computeIntegrandOnConfiguration(
     const std::function<double(const std::vector<double>&)> &integrand
 ) const {
     return integrand(positions);
+}
+
+
+double Configuration::getSideLength() const {
+    return sideLength;
 }
 
 void Configuration::setPositions(std::vector<double> &newPositions) {
@@ -109,16 +120,16 @@ createIntegrandsAndConfig(const NDGraph &graph,
     Configuration config(dimension, numFreeNodes, sigma);
 
     // For instance, initialize on a lattice
-    config.initialLattice();
+    config.initialRandom();
 
     // The integrand for the full potential
     auto integrandFull = graphToIntegrand(
-        graph, potential, sigma, epsilon, dimension, beta
+        graph, potential, sigma, epsilon, dimension, beta, config.getSideLength()
     );
 
     // The integrand for the reference potential
     auto integrandRef = graphToIntegrand(
-        graph, referencePotential, sigma, epsilon, dimension, beta
+        graph, referencePotential, sigma, epsilon, dimension, beta, config.getSideLength()
     );
 
     return std::make_tuple(integrandFull, integrandRef, config);
@@ -129,12 +140,12 @@ HardSpheresCoefficients::HardSpheresCoefficients() {
     coefficients[0] = 0.0; 
     coefficients[1] = 0.0; 
     coefficients[2] = 4.0; 
-    coefficients[4] = 10.0;
-    coefficients[5] = 18.365;
-    coefficients[6] = 28.244;
-    coefficients[7] = 39.82;
-    coefficients[8] = 53.34;
-    coefficients[9] = 68.54;
+    coefficients[3] = 10.0;
+    coefficients[4] = 18.365;
+    coefficients[5] = 28.244;
+    coefficients[6] = 39.82;
+    coefficients[7] = 53.34;
+    coefficients[8] = 68.54;
 }
 
 void HardSpheresCoefficients::changeForm(double sigma) {
