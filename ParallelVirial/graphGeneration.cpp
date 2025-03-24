@@ -2,7 +2,7 @@
 #include "GraphGeneration.hpp"
 
 int main(int argc, char **argv) {
-    int maxOrder = 5;
+    int maxOrder = 3;
     std::string filename = "graphs.dat";
     if (argc > 1) {
         maxOrder = std::atoi(argv[1]);

@@ -38,13 +38,11 @@ def main():
     )
     parser.add_argument("--no-multithreading", action="store_true",
                         help="Disable multithreading and run simulations sequentially.")
-    parser.add_argument("--runs-per-temp", type=int, default=1,
+    parser.add_argument("--runs-per-temp", type=int, default=5,
                         help="Number of simulation runs per temperature.")
-    parser.add_argument("--executable", type=str, default="./mayerSimulation.exe",
+    parser.add_argument("--executable", type=str, default="./main.exe",
                         help="Path to the simulation executable.")
-    parser.add_argument("--order", type=int, default=3,
-                        help="Order parameter for the simulation (first command-line argument for the executable).")
-    parser.add_argument("--nSamples", type=int, default=1000000,
+    parser.add_argument("--nSamples", type=int, default=100000000,
                         help="Number of Monte Carlo samples (2nd argument to the executable).")
     parser.add_argument("--dimension", type=int, default=3,
                         help="Dimension (3rd argument to the executable).")
@@ -63,16 +61,17 @@ def main():
     os.makedirs("output", exist_ok=True)
 
     # Build a queue of jobs.
-    # Each job is a tuple: (cmd, temperature, run number, retries)
+    # For each temperature we run multiple simulations.
+    # Each individual run writes its own temporary file (which we aggregate later).
     jobs = deque()
     for T_val in args.temperatures:
         for run_index in range(1, args.runs_per_temp + 1):
+            # The command-line arguments for the simulation executable are:
+            # [executable, graph_file, nSamples, dimension, sigma, epsilon, T, outfilename]
             outfilename = f"output/results_T_{T_val}_run_{run_index}.txt"
-            # The command-line arguments are:
-            # executable, order, nSamples, dimension, sigma, epsilon, T, outfilename
             cmd = [
                 args.executable,
-                str(args.order),
+                "graphs.dat",  # Supply the graph file as expected by your simulation
                 str(args.nSamples),
                 str(args.dimension),
                 str(args.sigma),
@@ -85,12 +84,12 @@ def main():
     completed_jobs = 0
 
     # Dictionary to collect outputs by temperature.
-    # For each temperature we will have a list of stdout strings.
+    # For each temperature we'll store the stdout from each successful simulation run.
     results_by_temp = {T: [] for T in args.temperatures}
 
     print("Launching simulations...")
     if args.no_multithreading:
-        # Run jobs sequentially
+        # Run jobs sequentially.
         while jobs:
             cmd, T_val, run_number, retries = jobs.popleft()
             ret, stdout, stderr = run_simulation(cmd)
@@ -136,16 +135,14 @@ def main():
                             print(f"Simulation for T={T_val}, run {run_number} failed (attempt {retries+1}) "
                                   f"and reached max retries. Error:\n{stderr}")
 
-    # Once all simulations are done, parse the output from each run.
+    # Aggregate the results from all runs per temperature.
     averaged_results = {}
     for T_val, outputs in results_by_temp.items():
-        # For each temperature, collect coefficients per order
         coefficients = defaultdict(list)
         for output in outputs:
             parsed = parse_simulation_output(output)
             for order, value in parsed.items():
                 coefficients[order].append(value)
-        # Compute average for each order if values were obtained
         averages = {}
         for order, values in coefficients.items():
             if values:
@@ -153,12 +150,14 @@ def main():
                 averages[order] = avg
         averaged_results[T_val] = averages
 
-    # Print out the averaged results.
-    print("\nAveraged simulation results (virial coefficients for packing fraction):")
-    for T_val in sorted(averaged_results.keys()):
-        print(f"\nTemperature T = {T_val}:")
-        for order in sorted(averaged_results[T_val].keys()):
-            print(f"  Order n = {order}: average coefficient = {averaged_results[T_val][order]}")
+    # Write one output file per temperature (readable by your plotter)
+    for T_val, averages in averaged_results.items():
+        filename = f"output/results_T_{T_val}.txt"
+        with open(filename, "w") as f:
+            f.write(f"T* = {T_val}\n")
+            for order in sorted(averages.keys()):
+                f.write(f"n={order}: {averages[order]}\n")
+        print(f"Averaged result written to {filename}")
 
 if __name__ == "__main__":
     main()
