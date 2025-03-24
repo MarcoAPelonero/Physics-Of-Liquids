@@ -97,10 +97,7 @@ int main(int argc, char** argv) {
     if (orders.empty()) {
         std::cerr << "No graphs loaded." << std::endl;
         return 1;
-    }
-
-    // --- Print the graphs for a particular order using NDGraph::printGraph() ---
-    int targetOrder = 4;  
+    } 
 
     // Prepare a vector for virial coefficients; indices 0,1 unused.
     std::vector<double> virialCoefficients(orders.size() + 2, 0.0);
