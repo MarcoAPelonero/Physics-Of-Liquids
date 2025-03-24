@@ -5,11 +5,12 @@
 #include <cmath>
 #include <cstdlib>
 #include "MonteCarlo.hpp"
+#include "graph.hpp"  // Provides NDGraph, Node, Edge
 
 #define M_PI 3.14159265358979323846
 
 // Simple Edge structure to hold graph edge data.
-struct Edge {
+struct EdgeData {
     int from;
     int to;
 };
@@ -19,7 +20,7 @@ struct GraphData {
     int numNodes;
     int numEdges;
     double degeneracy;
-    std::vector<Edge> edges;
+    std::vector<EdgeData> edges;
 };
 
 // Structure to hold all graphs for one order.
@@ -47,7 +48,7 @@ std::vector<OrderGraphs> loadGraphs(const std::string &filename) {
             GraphData g;
             infile >> g.numNodes >> g.numEdges >> g.degeneracy;
             for (int j = 0; j < g.numEdges; j++) {
-                Edge e;
+                EdgeData e;
                 infile >> e.from >> e.to;
                 g.edges.push_back(e);
             }
@@ -59,13 +60,29 @@ std::vector<OrderGraphs> loadGraphs(const std::string &filename) {
     return orders;
 }
 
+// Convert GraphData to NDGraph using the public member functions.
+// This uses NDGraph::addNode() to add nodes and NDGraph::addEdge() to add edges.
+NDGraph convertGraphDataToNDGraph(const GraphData &g) {
+    NDGraph ndGraph;
+    // Add nodes (assumes nodes are labeled 0 to numNodes-1)
+    for (int i = 0; i < g.numNodes; i++) {
+        ndGraph.addNode();
+    }
+    // Add edges
+    for (const auto &e : g.edges) {
+        ndGraph.addEdge(e.from, e.to);
+    }
+    ndGraph.setDegeneracy(static_cast<int>(g.degeneracy));
+    return ndGraph;
+}
+
 int main(int argc, char** argv) {
     std::string graphFile = "graphs.dat";
     int dimension = 3;
     double sigma = 1.0;
     double epsilon = 1.0;
     double T = 1.0;
-    long nSamples = 1000000;
+    long nSamples = 100000000;
 
     if (argc > 1) graphFile = argv[1];
     if (argc > 2) nSamples = std::atol(argv[2]);
@@ -75,13 +92,15 @@ int main(int argc, char** argv) {
     if (argc > 6) T = std::atof(argv[6]);
 
     double beta = 1.0 / T;
-    double sideLength = 5.0 * sigma;
 
     std::vector<OrderGraphs> orders = loadGraphs(graphFile);
     if (orders.empty()) {
         std::cerr << "No graphs loaded." << std::endl;
         return 1;
     }
+
+    // --- Print the graphs for a particular order using NDGraph::printGraph() ---
+    int targetOrder = 4;  
 
     // Prepare a vector for virial coefficients; indices 0,1 unused.
     std::vector<double> virialCoefficients(orders.size() + 2, 0.0);
@@ -97,6 +116,8 @@ int main(int argc, char** argv) {
                 h_edgeFrom.push_back(edge.from);
                 h_edgeTo.push_back(edge.to);
             }
+            // Define the side length based on the order so that the integration can go over all the configurations
+            double sideLength = n * 2.5 * sigma ;
             int nFreeNodes = n - 1;  // with node 0 fixed.
             double integralEstimate = runMonteCarloIntegration(dimension,
                                                                nFreeNodes,
@@ -119,6 +140,7 @@ int main(int argc, char** argv) {
 
     // Convert virial coefficients to a form in terms of packing fraction.
     double coeff = (M_PI / 3.0) * 2;
+    // double coeff = (M_PI / 6.0);
     double v0 = coeff * sigma * sigma * sigma;
     for (size_t i = 2; i < virialCoefficients.size(); i++) {
         double term = pow(v0, i - 1);

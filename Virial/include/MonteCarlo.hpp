@@ -21,4 +21,4 @@ double MonteCarloMayerMetropolis(
     long nSamples
 );
 
-#endif
+#endif // MCHITORMISS_HPP

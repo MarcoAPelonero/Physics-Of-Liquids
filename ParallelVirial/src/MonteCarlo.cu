@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 #include <cmath>
 #include <iostream>
+#include <ctime>  // For time()
 
 // Device structure to hold graph data.
 struct GraphDeviceData {
@@ -12,17 +13,25 @@ struct GraphDeviceData {
 };
 
 // Device function: Lennard-Jones potential (with safeguard for r==0).
-__device__ double potentialFunction(double r, double sigma, double epsilon) {
+__device__ double potentialFunctionLJ(double r, double sigma, double epsilon) {
     if (r == 0.0) return 1e12;
+    // Cutoff condition
+    if (r >= 2.5 * sigma) return 0.0;
     double sr = sigma / r;
-    double sr6 = pow(sr, 6);
+    double sr6 = sr * sr * sr * sr * sr * sr;
     double sr12 = sr6 * sr6;
     return 4.0 * epsilon * (sr12 - sr6);
 }
 
+// Device function: Hard Spheres
+__device__ double potentialFunctionHS(double r, double sigma, double epsilon) {
+    if (r < sigma) return 1e12;
+    return 0.0;
+}
+
 // Device function: Mayer f-function = exp(-beta*U) - 1.
 __device__ double mayerF(double r, double sigma, double epsilon, double beta) {
-    return exp(-beta * potentialFunction(r, sigma, epsilon)) - 1.0;
+    return exp(-beta * potentialFunctionLJ(r, sigma, epsilon)) - 1.0;
 }
 
 // Device function: Computes the distance with node 0 fixed at the origin.
@@ -34,7 +43,8 @@ __device__ double distanceFixedNode0(const double* coords, int i, int j, int dim
         double xi = (i == 0) ? 0.0 : coords[(i - 1) * dimension + d];
         double xj = (j == 0) ? 0.0 : coords[(j - 1) * dimension + d];
         double diff = xi - xj;
-        diff = diff - sideLength * round(diff / sideLength);
+        // Uncomment to enable PCB
+        // diff = diff - sideLength * round(diff / sideLength);
         dist2 += diff * diff;
     }
     return sqrt(dist2);
@@ -69,11 +79,12 @@ __global__ void monteCarloKernel(double *partialSums,
                                  double beta,
                                  long samplesPerThread,
                                  double sideLength,
-                                 GraphDeviceData graphData) {
+                                 GraphDeviceData graphData,
+                                 unsigned long long seed) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int totalCoords = dimension * nFreeNodes;
     curandState state;
-    curand_init(1234, idx, 0, &state);
+    curand_init(seed, idx, 0, &state);
     
     double partialSum = 0.0;
     // Assume totalCoords <= 64; adjust if necessary.
@@ -127,6 +138,9 @@ double runMonteCarloIntegration(int dimension,
     double *d_partialSums;
     cudaMalloc((void**)&d_partialSums, totalThreads * sizeof(double));
 
+    // Generate a random seed based on the current time.
+    unsigned long long seed = static_cast<unsigned long long>(time(NULL));
+
     monteCarloKernel<<<numBlocks, threadsPerBlock>>>(d_partialSums,
                                                      dimension,
                                                      nFreeNodes,
@@ -135,7 +149,8 @@ double runMonteCarloIntegration(int dimension,
                                                      beta,
                                                      samplesPerThread,
                                                      sideLength,
-                                                     graphData);
+                                                     graphData,
+                                                     seed);
     cudaDeviceSynchronize();
 
     double *h_partialSums = new double[totalThreads];
