@@ -100,6 +100,26 @@ const std::vector<double> &Configuration::getPositions() const {
     return positions;
 }
 
+void Configuration::printConfiguration() const {
+    for (int i = 0; i < numFreeNodes; ++i) {
+        std::cout << "Particle " << i << ": ";
+        for (int d = 0; d < dimension; ++d) {
+            std::cout << positions[i * dimension + d] << " ";
+        }
+        std::cout << std::endl;
+    }
+}
+
+void Configuration::printConfiguration(std::ofstream &outFile) const {
+    for (int i = 0; i < numFreeNodes; ++i) {
+        outFile << "Particle " << i << ": ";
+        for (int d = 0; d < dimension; ++d) {
+            outFile << positions[i * dimension + d] << " ";
+        }
+        outFile << std::endl;
+    }
+}
+
 std::tuple<
     std::function<double(const std::vector<double>&)>, 
     std::function<double(const std::vector<double>&)>, 
@@ -152,6 +172,19 @@ void HardSpheresCoefficients::changeForm(double sigma) {
     double v0 = (M_PI / 6.0) * sigma * sigma * sigma;
     for (int i = 0; i < 10; ++i) {
         coefficients[i] *= pow(v0, i - 1);
+    }
+}
+
+void HardSpheresCoefficients::getGraphIntegral(double sigma) {
+    changeForm(sigma);
+
+    // Factor should be -(n-1)/n!
+    for (int i = 0; i < 10; ++i) {
+        if (i < 2) {
+            continue;
+        }
+        double factor = -(i-1) / ( std::tgamma(i+1) );
+        coefficients[i] /= factor;
     }
 }
 

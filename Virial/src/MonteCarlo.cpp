@@ -16,7 +16,8 @@ double monteCarloHitOrMiss(
     double sideLength = 5.0 * sigma;
     double volume = std::pow(sideLength, dimension * nFreeNodes);
 
-    std::mt19937_64 rng(123456789ULL);
+    std::random_device rd;
+    std::mt19937_64 rng(rd());
     std::uniform_real_distribution<double> dist(-sideLength/2, sideLength/2);
 
     double sum = 0.0;
@@ -43,7 +44,6 @@ double MonteCarloMayerMetropolis(
 )
 {
     // Add print out on analysis file for debugging purposes
-    std::cout << "Starting Monte Carlo Mayer Metropolis" << std::endl;
     std::ofstream analysisFile("analysis.txt");
     
     double delta = 0.05;

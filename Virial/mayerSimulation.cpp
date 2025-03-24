@@ -14,7 +14,7 @@
 
 int main(int argc, char **argv) {
 
-    int order = 2;
+    int order = 3;
     int nSamples = 1000000;
     int dimension = 3;
     double sigma = 1.0;
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
     std::vector<double> virialCoefficientsMayerMetropolis(order+1, 0.0);
 
     HardSpheresCoefficients hsCoeffs;
-    hsCoeffs.changeForm(sigma);
+    hsCoeffs.getGraphIntegral(sigma);
     // Define the reference values for the HS potential
 
     PotentialFunction potential = [](double r, double sigma, double epsilon) {
@@ -100,8 +100,10 @@ int main(int argc, char **argv) {
             integral += estimate * deg;
         }
 
+
         double factor = -(n-1) / ( std::tgamma(n+1) );
         double finalContribution = factor * integral;
+        
         virialCoefficientsMayerMetropolis[n] = finalContribution * hsCoeffs[n];
     }
 
