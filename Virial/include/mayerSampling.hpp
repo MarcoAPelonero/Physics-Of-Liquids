@@ -8,6 +8,7 @@
 #include "potentials.hpp"
 #include <functional>
 #include <tuple>
+#include <fstream>
 
 #define M_PI 3.14159265358979323846
 
@@ -49,9 +50,13 @@ public:
 
     // Getter for the single-vector positions
     // (x1, y1, z1, x2, y2, z2, ...)
+
     double getSideLength() const;
     void setPositions(std::vector<double> &newPositions);
     const std::vector<double> &getPositions() const;
+
+    void printConfiguration() const;
+    void printConfiguration(std::ofstream &outFile) const;
 };
 
 // Create integrands and config, as before.
@@ -76,6 +81,7 @@ class HardSpheresCoefficients {
         HardSpheresCoefficients();
 
         void changeForm(double sigma);
+        void getGraphIntegral(double sigma);
 
         double operator[](int i) const;
 };
