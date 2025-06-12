@@ -1,38 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import itertools
 from tqdm import tqdm
-
-def read_lammps_dump(filename):
-    """
-    Reads a LAMMPS dump file and returns:
-      - box_bounds: [[xlo, xhi], [ylo, yhi], [zlo, zhi]]
-      - atoms: list of dicts with keys ['id','type','x','y','z','radius']
-    Assumes the 'xs ys zs' columns are scaled (0–1) and box is orthogonal.
-    """
-    atoms = []
-    with open(filename, 'r') as f:
-        line = f.readline()
-        while line:
-            if line.startswith("ITEM: BOX BOUNDS"):
-                bounds = [list(map(float, f.readline().split())) for _ in range(3)]
-            elif line.startswith("ITEM: ATOMS"):
-                cols = line.strip().split()[2:] 
-                for atom_line in f:
-                    vals = atom_line.split()
-                    atom = dict(zip(cols, map(float, vals)))
-                    atoms.append({
-                        'id': int(atom['id']),
-                        'type': int(atom['type']),
-                        'x_scaled': atom['xs'],
-                        'y_scaled': atom['ys'],
-                        'z_scaled': atom['zs'],
-                        'radius': atom['Radius']
-                    })
-                break
-            line = f.readline()
-    return bounds, atoms
+from utils import read_lammps_dump
 
 def scale_positions(atoms, box_bounds):
     """
@@ -126,7 +96,7 @@ def save_obj_spheres(atoms, sphere_resolution, filename="spheres.obj"):
             vertex_offset += n_u * n_v  
 
 if __name__ == "__main__":
-    dump_file = "last.dump"           
+    dump_file = "benchmark_sc.dump"           
     sphere_mesh_resolution = 16       
 
     box_bounds, atoms = read_lammps_dump(dump_file)
