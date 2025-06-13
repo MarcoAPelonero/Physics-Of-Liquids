@@ -35,7 +35,7 @@ def main():
     for T_val in T_list:
         outfilename = f"output/results_T_{T_val}.txt"
         cmd = [
-            "./mayerSimulation.exe", 
+            "./main.exe", 
             str(order),
             str(nSamples),
             str(dimension),
