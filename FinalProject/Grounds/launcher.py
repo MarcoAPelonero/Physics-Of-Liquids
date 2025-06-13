@@ -3,7 +3,7 @@ import subprocess
 import sys
 
 # Define the range of radii: 10 values evenly spaced between 1 and 5
-radii = np.linspace(1, 5.0, 15)
+radii = np.linspace(1.2, 6.0, 15)
 
 # Path to the orderParameters script
 SCRIPT = "orderParameters.py"

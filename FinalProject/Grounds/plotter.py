@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from tqdm import tqdm
-from utils import read_lammps_dump
+from utils.importUtils import read_lammps_dump
 
 def scale_positions(atoms, box_bounds):
     """
@@ -16,7 +16,7 @@ def scale_positions(atoms, box_bounds):
         a['y'] = ylo + a['y_scaled'] * (yhi - ylo)
         a['z'] = zlo + a['z_scaled'] * (zhi - zlo)
 
-def plot_spheres(atoms, box_bounds, sphere_resolution=12, save__3d_file=False):
+def plot_spheres(atoms, box_bounds, sphere_resolution=12, save__3d_file=False, save = True):
     """
     Plots each atom as a sphere in 3D. 
     sphere_resolution controls the mesh density of each sphere.
@@ -55,8 +55,11 @@ def plot_spheres(atoms, box_bounds, sphere_resolution=12, save__3d_file=False):
 
     if save__3d_file:
         save_obj_spheres(atoms, sphere_resolution, filename="spheres.obj")
-    
-    plt.show()
+    if save:
+        plt.title("Atom Spheres Plot")
+        plt.savefig("atom_spheres_plot.png", dpi=300)
+    else:
+        plt.show()
 
 def save_obj_spheres(atoms, sphere_resolution, filename="spheres.obj"):
     """
@@ -96,9 +99,9 @@ def save_obj_spheres(atoms, sphere_resolution, filename="spheres.obj"):
             vertex_offset += n_u * n_v  
 
 if __name__ == "__main__":
-    dump_file = "benchmark_sc.dump"           
+    dump_file = "data/last.dump"           
     sphere_mesh_resolution = 16       
 
     box_bounds, atoms = read_lammps_dump(dump_file)
     scale_positions(atoms, box_bounds)
-    plot_spheres(atoms, box_bounds, sphere_resolution=sphere_mesh_resolution)
+    plot_spheres(atoms, box_bounds, sphere_resolution=sphere_mesh_resolution, save = True)
