@@ -67,7 +67,7 @@ def benchmark():
     Benchmark the computation of Q_l for a large number of atoms.
     """
     try: 
-        bounds , atoms = read_lammps_dump("benchmark_sc.dump")
+        bounds , atoms = read_lammps_dump("data/benchmark_sc.dump")
     except FileNotFoundError:
         print("Benchmark file not found. Please run makeBenchMarkLattice.py first.")
         return
@@ -114,4 +114,5 @@ if __name__ == "__main__":
         help="filter atoms by radius before computing Q (if omitted, defaults to legacy r=0.5)"
     )
     args = parser.parse_args()
-    main(args.cutoff)
+    benchmark()
+    # main(args.cutoff)

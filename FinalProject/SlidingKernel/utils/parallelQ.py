@@ -1,8 +1,7 @@
 import torch
 import math
-from tqdm import tqdm 
+from tqdm.auto import tqdm 
 import numpy as np
-from math import pi
 
 max_factorial = 40
 factorials = torch.ones(max_factorial + 1, dtype=torch.float64)
@@ -61,7 +60,8 @@ def compute_spherical_harmonics(l, theta, phi, norm_consts):
     return Y_all
 
 
-def compute_Ql(positions, l_list, r_cutoff, box=None):
+def compute_Ql(positions, l_list, r_cutoff, box=None, verbose=False,
+               inner_desc="ℓ-values", inner_position=1):
     """
     positions: (N,3) tensor of coordinates
     l_list:   list of integers (e.g., [4,6])
@@ -88,17 +88,18 @@ def compute_Ql(positions, l_list, r_cutoff, box=None):
     mask_idx = neighbor_mask.nonzero(as_tuple=False)
     i_idx, j_idx = mask_idx[:, 0], mask_idx[:, 1]
     unique, counts = torch.unique(i_idx, return_counts=True)
-    print(f"\nNeighbor counts summary:")
-    print(f"Min neighbors: {counts.min().item()}")
-    print(f"Max neighbors: {counts.max().item()}")
-    print(f"Avg neighbors: {counts.float().mean().item():.1f}")
+    if verbose:
+        print(f"\nNeighbor counts summary:")
+        print(f"Min neighbors: {counts.min().item()}")
+        print(f"Max neighbors: {counts.max().item()}")
+        print(f"Avg neighbors: {counts.float().mean().item():.1f}")
     rij = disp[i_idx, j_idx]
     r = dist[i_idx, j_idx]
     theta = torch.acos(torch.clamp(rij[:, 2] / r, -1.0, 1.0))  
     phi = torch.atan2(rij[:, 1], rij[:, 0])                    
 
     results = {}
-    for ell in tqdm(l_list, desc="Computing coefficients", leave=True):
+    for ell in l_list:
         Y_all = compute_spherical_harmonics(ell, theta, phi, norm_consts)
         
         q_lm = torch.zeros((N, 2*ell+1), dtype=torch.cfloat, device=device)
@@ -166,89 +167,3 @@ def compute_rdf(positions, box, r_max=None, dr=0.01):
     g_r = counts / norm
 
     return r_centers, g_r
-
-def compute_Ql_knn(positions, l_list, n_neighbors, box=None):
-    """
-    positions : (N,3) tensor of coordinates
-    l_list    : list[int] – e.g. [4, 6]
-    n_neighbors: int      – number of nearest neighbours to use for every atom
-    box       : (3,2) periodic boundaries [[xmin,xmax], [ymin,ymax], [zmin,zmax]]
-    """
-    if n_neighbors < 1:
-        raise ValueError("`n_neighbors` must be ≥ 1")
-    N       = positions.shape[0]
-    if n_neighbors >= N:
-        raise ValueError("`n_neighbors` must be smaller than the number of atoms")
-
-    device  = positions.device
-    dtype   = positions.dtype
-    pos     = positions
-
-    max_l         = max(l_list) if l_list else 0
-    norm_consts   = compute_normalization_constants(max_l)
-
-    disp = pos.unsqueeze(1) - pos.unsqueeze(0)            # (N,N,3)
-    if box is not None:
-        lengths = (box[:, 1] - box[:, 0]).view(1, 3)      # (1,3)
-        for d in range(3):
-            L = lengths[0, d]
-            disp[:, :, d] -= L * torch.round(disp[:, :, d] / L)
-
-    dist = torch.norm(disp, dim=-1)                       # (N,N)
-    dist.fill_diagonal_(torch.finfo(dtype).max)           # exclude self‐distance
-
-    knn_dist, knn_idx = torch.topk(dist, k=n_neighbors, largest=False)  # (N,k)
-    i_idx = torch.arange(N, device=device).repeat_interleave(n_neighbors)
-    j_idx = knn_idx.reshape(-1)
-
-    unique, counts = torch.unique(i_idx, return_counts=True)
-    print("\nNeighbor counts summary:")
-    print(f"Min neighbors: {counts.min().item()}")
-    print(f"Max neighbors: {counts.max().item()}")
-    print(f"Avg neighbors: {counts.float().mean().item():.1f}")
-
-    rij   = disp[i_idx, j_idx]                 # (N*k,3)
-    r     = torch.norm(rij, dim=1)
-    theta = torch.acos(torch.clamp(rij[:, 2] / r, -1.0, 1.0))
-    phi   = torch.atan2(rij[:, 1], rij[:, 0])
-
-    results = {}
-    for ell in tqdm(l_list, desc="Computing coefficients", leave=True):
-        Y_all = compute_spherical_harmonics(ell, theta, phi, norm_consts)  # (Nk,2ℓ+1)
-
-        q_lm = torch.zeros((N, 2 * ell + 1), dtype=torch.cfloat, device=device)
-        q_lm.index_add_(0, i_idx, Y_all)
-
-        # normalise by neighbour count (= n_neighbors for every atom)
-        q_lm /= n_neighbors
-
-        q_l_atom  = torch.sqrt((4 * pi / (2 * ell + 1)) * (q_lm.abs() ** 2).sum(dim=1))
-        q_lm_mean = q_lm.mean(dim=0)
-        Q_l_global = torch.sqrt((4 * pi / (2 * ell + 1)) *
-                                (q_lm_mean.abs() ** 2).sum()).item()
-        Q_l = q_l_atom.mean().item()
-
-        results[ell] = {
-            "atom_indices": [
-                {"index": i, "q_l_atom": q_l_atom[i].item()}
-                for i in range(N)
-            ],
-            "Q_l": Q_l,
-            "Q_l_global": Q_l_global
-        }
-
-    return results
-
-
-def compute_Ql_knn_from_atoms(atoms, l_list, n_neighbors, box=None):
-    """
-    atoms       : iterable of dicts with keys 'x','y','z'
-    l_list      : list[int] – e.g. [4, 6]
-    n_neighbors : int       – number of nearest neighbours
-    box         : (3,2) periodic boundaries
-    """
-    positions = torch.tensor(
-        [[a["x"], a["y"], a["z"]] for a in atoms],
-        dtype=torch.float32,
-    )
-    return compute_Ql_knn(positions, l_list, n_neighbors, box)
