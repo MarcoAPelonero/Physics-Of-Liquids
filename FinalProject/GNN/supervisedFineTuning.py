@@ -1,6 +1,6 @@
 from LoadingUtils.dataset import import_datasets
 from LoadingUtils.dataloader import create_dataloaders
-from Network.classificationHead import ContrastiveParticleClassifier
+from Network.classificationHead import ContrastiveParticleClassifier, test_representations
 from Network.network import ContrastiveGNN
 from Network.trainingFuncs import supervised_fine_tuning
 import matplotlib.pyplot as plt
@@ -10,14 +10,15 @@ import torch
 # we want just a few examples to fine tune after unsupervised pre-training.
 
 if __name__ == "__main__":
-    _ , validation_dataset, test_dataset = import_datasets()
+    train_dataset, validation_dataset, test_dataset = import_datasets()
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     batch_size = 8
     hidden_dim = 64
-    epochs = 2
-
+    epochs = 1
+    
+    train_dataloader = create_dataloaders(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     val_dataloader = create_dataloaders(validation_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
     test_dataloader = create_dataloaders(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
@@ -25,7 +26,7 @@ if __name__ == "__main__":
         node_dim=5,
         hidden_dim=hidden_dim,
         proj_dim=128,
-        k=5,
+        k=3,
         num_encoder_layers=2,
         num_message_passes=2
     )
@@ -36,20 +37,36 @@ if __name__ == "__main__":
         node_dim=5,
         hidden_dim=hidden_dim,
         proj_dim=128,
-        k=5,
+        k=3,
         num_encoder_layers=2,
         num_message_passes=2,
-        use_attention=False,
-        use_skip_connections=True,
-        use_batch_norm=False,
     )
+
+    pretrained_acc = test_representations(trainedHead, val_dataloader, device)
+
+    untrained_acc = test_representations(untrainedHead, val_dataloader, device)
+
+    print(f"Pretrained linear probe accuracy: {pretrained_acc:.4f}")
+    print(f"Untrained linear probe accuracy: {untrained_acc:.4f}")
 
     trainedClassifier = ContrastiveParticleClassifier(trainedHead, freeze_backbone=True)
     untrainedClassifier = ContrastiveParticleClassifier(untrainedHead, freeze_backbone=False)
 
+    print("\nTrained Classifier Parameters (should be frozen):")
+    for name, param in trainedClassifier.named_parameters():
+        if 'gnn_backbone' in name:
+            print(f"{name}: requires_grad={param.requires_grad} (should be False)")
+        else:
+            print(f"{name}: requires_grad={param.requires_grad} (should be True)")
+
     trainedClassifier.to(device)
     untrainedClassifier.to(device)
 
+    data, _ = next(iter(train_dataloader))
+    positions = data[:, :, :3].to(device)
+
+    print("k=3 edges:", trainedHead.get_edges(positions, k=3).shape)  # Should be ~3×num_nodes
+    print("k=15 edges:", trainedHead.get_edges(positions, k=15).shape) 
     # Pass one batch through 
     for data, labels in val_dataloader:
         data = data.to(device)
@@ -69,18 +86,19 @@ if __name__ == "__main__":
     class_0_count = 0
     class_1_count = 0
 
-    for labels in validation_dataset.labels:
+    for labels in train_dataset.labels:
         class_0_count += (labels == 0).sum().item()
         class_1_count += (labels == 1).sum().item()
 
-    ratio = class_1_count / class_0_count
+    
+    ratio = class_0_count / class_1_count
 
     trained_train_loss, trained_train_accuracy, trained_valid_loss, trained_valid_accuracy = supervised_fine_tuning(
         model=trainedClassifier,
         train_loader=val_dataloader,
         val_loader=test_dataloader,
         epochs=epochs,
-        learning_rate=0.001,
+        learning_rate=0.0005,
         ratio=ratio,
         device=device
     )
@@ -90,7 +108,7 @@ if __name__ == "__main__":
         train_loader=val_dataloader,
         val_loader=test_dataloader,
         epochs=epochs,
-        learning_rate=0.001,
+        learning_rate=0.0005,
         ratio=ratio,
         device=device
     )
@@ -140,13 +158,17 @@ if __name__ == "__main__":
     data = data.to(device)
     positions = positions.to(device)
 
-    # Make sure the predictions are just 0 and 1
+    # Make sure the predictions are just, so apply a sigmoid and then map 0 and 1
     with torch.no_grad():
         trained_test_predictions = trainedClassifier(data,  positions)
+        trained_test_predictions = trained_test_predictions.squeeze(-1)  # Remove last dimension
+        trained_test_predictions = torch.sigmoid(trained_test_predictions)
         trained_test_predictions = trained_test_predictions.cpu().detach().numpy()
         trained_test_predictions = (trained_test_predictions > 0.5).astype(int)
 
         untrained_test_predictions = untrainedClassifier(data, positions)
+        untrained_test_predictions = untrained_test_predictions.squeeze(-1)
+        untrained_test_predictions = torch.sigmoid(untrained_test_predictions)
         untrained_test_predictions = untrained_test_predictions.cpu().detach().numpy()
         untrained_test_predictions = (untrained_test_predictions > 0.5).astype(int)
 

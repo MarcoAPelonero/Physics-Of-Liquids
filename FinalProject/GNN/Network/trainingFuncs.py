@@ -202,6 +202,8 @@ def supervised_fine_tuning(model, train_loader, val_loader, epochs, learning_rat
             
             epoch_loss += loss.item()
             
+            outputs = outputs.squeeze(-1)  # Remove last dimension
+            outputs = torch.sigmoid(outputs)
             predicted = (outputs > 0.5).float()
             correct += (predicted == labels).sum().item()
             total += labels.size(0)
@@ -230,6 +232,8 @@ def supervised_fine_tuning(model, train_loader, val_loader, epochs, learning_rat
 
                 val_loss += loss.item()
 
+                outputs = outputs.squeeze(-1)  # Remove last dimension
+                outputs = torch.sigmoid(outputs)
                 predicted = (outputs > 0.5).float()
                 correct += (predicted == labels).sum().item()
                 total += labels.size(0)

@@ -58,7 +58,7 @@ class ParticleClassifier(nn.Module):
         logits = self.net(h)  # [batch_size, num_particles, 1]
         
         # Remove last dimension and apply sigmoid
-        return torch.sigmoid(logits.squeeze(-1))  # [batch_size, num_particles]
+        return logits.squeeze(-1)  # [batch_size, num_particles]
     
 class ContrastiveParticleClassifier(nn.Module):
     """End-to-end contrastive GNN with particle classification head."""
@@ -93,3 +93,31 @@ class ContrastiveParticleClassifier(nn.Module):
         """Unfreeze all GNN backbone parameters."""
         for param in self.gnn_backbone.parameters():
             param.requires_grad = True
+
+def test_representations(model, dataloader, device):
+    model.to(device)
+    model.eval()
+    features, labels = [], []
+    
+    with torch.no_grad():
+        for data, label in dataloader:
+            positions = data[:, :, :3].to(device)
+            data = data.to(device)
+            
+            _, h = model(data, positions, k=3)
+
+            # Flatten features and labels:
+            features.append(h.reshape(-1, h.size(-1)))
+            labels.append(label.view(-1))
+    
+    X = torch.cat(features).cpu().numpy()
+    y = torch.cat(labels).cpu().numpy()
+
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import train_test_split
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    clf = LogisticRegression().fit(X_train, y_train)
+    acc = clf.score(X_test, y_test)
+    print(f"Linear probe accuracy: {acc:.4f}")
+    return acc
