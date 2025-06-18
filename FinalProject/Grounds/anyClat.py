@@ -206,7 +206,7 @@ def main():
     parser.add_argument(
         "--k",
         type=int,
-        default=1,
+        default=6,
         help="k in k‑NN graph (default: 1)",
     )
     parser.add_argument(
@@ -223,7 +223,7 @@ def main():
     parser.add_argument(
         "--percentile",
         type=float,
-        default=80.0,
+        default=85.0,
         help="Percentile value (e.g., 80 means remove above 80th if mode is 'up')",
     )
     args = parser.parse_args()
