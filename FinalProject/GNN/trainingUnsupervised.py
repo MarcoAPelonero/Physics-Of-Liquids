@@ -1,6 +1,7 @@
 from LoadingUtils.dataset import import_datasets
 from LoadingUtils.dataloader import create_dataloaders, visualize_features
 from Network.network import ContrastiveGNN
+from Network.newNetwork import ContrastiveComplexGNN
 from Network.trainingFuncs import train
 from Network.lossMetric import nt_xent_loss_2n_3d, nt_xent_accuracy_2n_3d
 import matplotlib.pyplot as plt
@@ -27,7 +28,7 @@ if __name__ == "__main__":
     print(f"Validation DataLoader: {len(val_dataloader)} batches")
     print(f"Test DataLoader: {len(test_dataloader)} batches")
 
-    model = ContrastiveGNN(
+    model = ContrastiveComplexGNN(
         node_dim=5,
         hidden_dim=hidden_dim,
         proj_dim=128,

@@ -56,7 +56,7 @@ class CrystalDataset(Dataset):
     def get_box_size(self, idx):
         return self.box_sizes[idx]
 
-def import_datasets(dataset_path: str = None, partitions: List = [0.84, 0.08, 0.08]) -> CrystalDataset:
+def import_datasets(dataset_path: str = None, partitions: List = [0.8, 0.1, 0.1]) -> CrystalDataset:
     """
     Import dataset from the specified path.
     
@@ -69,6 +69,9 @@ def import_datasets(dataset_path: str = None, partitions: List = [0.84, 0.08, 0.
     """
     if dataset_path is None:
         dataset_path = r'C:\Users\marcu\Desktop\github repos\Physics-Of-Liquids\FinalProject\GNN\Dataset\hard_sphere_ensemble'
+        # check if the dataset path exists
+        if not os.path.exists(dataset_path):
+            dataset_path = r'C:\Users\marcu\OneDrive\Desktop\Stuff\github_repos\Physics-Of-Liquids\FinalProject\GNN\Dataset\hard_sphere_ensemble'
 
     assert sum(partitions) == 1, "Partitions must sum to 1"
     assert len(partitions) == 3, "Partitions must be a list of three values for train, validation, and test sets"

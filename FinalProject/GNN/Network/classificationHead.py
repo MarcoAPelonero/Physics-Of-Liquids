@@ -80,8 +80,25 @@ class ContrastiveParticleClassifier(nn.Module):
         if freeze_backbone:
             self.freeze_backbone()  # Now calls method explicitly
     
-    def forward(self, x: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
-        z, h = self.gnn_backbone(x, positions)  # Clear variable name
+    def forward(self, x: torch.Tensor, positions: torch.Tensor, q_values=None, **kwargs) -> torch.Tensor:
+        """Forward pass for end-to-end inference.
+        
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input features
+        positions : torch.Tensor
+            Node coordinates
+        q_values : torch.Tensor, optional
+            Q-values for the particles
+        **kwargs : dict
+            Additional arguments to pass to the backbone GNN
+        """
+        # Combine q_values with kwargs if provided as a positional argument
+        if q_values is not None:
+            kwargs['q_values'] = q_values
+            
+        z, h = self.gnn_backbone(x, positions, **kwargs)  # Pass all kwargs to backbone
         return self.classifier(h)
     
     def freeze_backbone(self) -> None:  # Renamed from 'freeze_gnn'

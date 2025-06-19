@@ -58,6 +58,33 @@ def train_epoch(model, data_loader, loss_fn, metric_fn, optimizer, device):
 
     return avg_loss, avg_metric
 
+def train_epoch_new(model, data_loader, loss_fn, metric_fn, optimizer, device):
+    model.train()
+    total_loss = 0.0
+    total_metric = 0.0
+    num_batches = len(data_loader)
+
+    for data, _ in data_loader:
+        optimizer.zero_grad()
+        data = data.to(device)
+        
+        positions = data[..., :3]  # (B, N, 3)
+        q_values = data[..., -2:]  # (B, N, 2)
+        
+        z1, h1 = model(data, positions, q_values, k_spatial=5, k_q=5, q_similar=True)
+        z2, h2 = model(data, positions, q_values, k_spatial=5, k_q=5, q_similar=False)
+        
+        loss = loss_fn(z1, z2)
+        metric = metric_fn(z1, z2)
+        
+        loss.backward()
+        optimizer.step()
+        
+        total_loss += loss.item()
+        total_metric += metric
+
+    return total_loss / num_batches, total_metric / num_batches
+
 def validate_epoch(model, data_loader, loss_fn, metric_fn, device):
     """
     Validate the model for one epoch.
@@ -98,10 +125,33 @@ def validate_epoch(model, data_loader, loss_fn, metric_fn, device):
 
     return avg_loss, avg_metric
 
+def validate_epoch_new(model, data_loader, loss_fn, metric_fn, device):
+    model.eval()
+    total_loss = 0.0
+    total_metric = 0.0
+    num_batches = len(data_loader)
+
+    with torch.no_grad():
+        for data, _ in data_loader:
+            data = data.to(device)
+            
+            positions = data[..., :3]
+            q_values = data[..., -2:]  
+            z1, h1 = model(data, positions, q_values, k_spatial=5, k_q=5, q_similar=True)
+            z2, h2 = model(data, positions, q_values, k_spatial=5, k_q=5, q_similar=False)
+            loss = loss_fn(z1, z2)
+            metric = metric_fn(z1, z2)
+            total_loss += loss.item()
+            total_metric += metric
+
+    avg_loss = total_loss / num_batches
+    avg_metric = total_metric / num_batches
+    return avg_loss, avg_metric
+
 def train(model, train_loader, val_loader, 
           epochs, learning_rate, weight_decay,
           loss_fn, metric_fn, 
-          device = 'cpu', patience=10, save_path=None):
+          device = 'cpu', patience=10, save_path=None, mode = 'new'):
     """
     Train the GNN model with early stopping and save the best model.
 
@@ -138,11 +188,15 @@ def train(model, train_loader, val_loader,
         val_loss = 0.0
         val_metric = 0.0
 
-        train_loss, train_metric = train_epoch(model, train_loader, loss_fn, metric_fn, optimizer, device)
+        if mode == 'new':
+            train_loss, train_metric = train_epoch_new(model, train_loader, loss_fn, metric_fn, optimizer, device)
+            val_loss, val_metric = validate_epoch_new(model, val_loader, loss_fn, metric_fn, device)
+        else:
+            train_loss, train_metric = train_epoch(model, train_loader, loss_fn, metric_fn, optimizer, device)
+            val_loss, val_metric = validate_epoch(model, val_loader, loss_fn, metric_fn, device)
+
         train_losses.append(train_loss)
         train_metrics.append(train_metric)
-
-        val_loss, val_metric = validate_epoch(model, val_loader, loss_fn, metric_fn, device)
         val_losses.append(val_loss)
         val_metrics.append(val_metric)
 
@@ -249,3 +303,100 @@ def supervised_fine_tuning(model, train_loader, val_loader, epochs, learning_rat
               f"Val Loss: {avg_val_loss:.4f}, Val Accuracy: {accuracy:.4f}")
     
     return train_losses, train_metrics, val_losses, val_metrics 
+
+def new_supervised_fine_tuning(model, train_loader, val_loader, epochs, learning_rate, ratio, device='cpu'):
+    train_losses = []
+    train_metrics = []
+
+    val_losses = []
+    val_metrics = []
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    model.to(device)
+    
+    pos_weight = torch.tensor([ratio], device=device)
+    criterion = BCEWithLogitsLoss(pos_weight=pos_weight)
+    
+    for epoch in tqdm(range(epochs), total=epochs, desc="Supervised Fine-Tuning Progress"):
+
+        epoch_loss = 0.0
+        correct = 0
+        total = 0
+
+        model.train()
+
+        for data, label in train_loader:
+            data = data.to(device)
+            positions = data[..., :3]
+            q_values = data[..., -2:]  # Assuming the last two columns are q6 and q10
+            positions = positions.to(device)
+            q_values = q_values.to(device)
+            labels = label.to(device).float()
+
+            optimizer.zero_grad()
+            
+            outputs  = model(
+                x=data, 
+                positions=positions, 
+                q_values=q_values,
+                k_spatial=5,  # or whatever you used during training
+                k_q=5         # or whatever you used during training
+            )
+            loss = criterion(outputs, labels)
+            
+            loss.backward()
+            optimizer.step()
+            
+            epoch_loss += loss.item()
+            
+            outputs = outputs.squeeze(-1)  # Remove last dimension
+            outputs = torch.sigmoid(outputs)
+            predicted = (outputs > 0.5).float()
+            correct += (predicted == labels).sum().item()
+            total += labels.size(0)
+        
+        avg_loss = epoch_loss / len(train_loader)
+        accuracy = correct / total
+        
+        train_losses.append(avg_loss)
+        train_metrics.append(accuracy)
+
+        # Validation
+        model.eval()
+        val_loss = 0.0
+        correct = 0
+        total = 0
+
+        with torch.no_grad():
+            for data, label in val_loader:
+                data = data.to(device)
+                positions = data[..., :3]
+                q_values = data[..., -2:]  
+                positions = positions.to(device)
+                q_values = q_values.to(device)
+                labels = label.to(device).float()
+
+                outputs  = model(
+                    x=data, 
+                    positions=positions, 
+                    q_values=q_values,
+                    k_spatial=5,  # or whatever you used during training
+                    k_q=5         # or whatever you used during training
+                )
+                loss = criterion(outputs, labels)
+
+                val_loss += loss.item()
+
+                outputs = outputs.squeeze(-1)  # Remove last dimension
+                outputs = torch.sigmoid(outputs)
+                predicted = (outputs > 0.5).float()
+                correct += (predicted == labels).sum().item()
+                total += labels.size(0)
+            avg_val_loss = val_loss / len(val_loader)
+            accuracy = correct / total
+            val_losses.append(avg_val_loss)
+            val_metrics.append(accuracy)
+        print(f"Epoch [{epoch + 1}/{epochs}], "
+              f"Train Loss: {avg_loss:.4f}, Train Accuracy: {accuracy:.4f}, "
+              f"Val Loss: {avg_val_loss:.4f}, Val Accuracy: {accuracy:.4f}")
+    return train_losses, train_metrics, val_losses, val_metrics
